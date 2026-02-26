@@ -2922,8 +2922,10 @@ class IEMSUserRoleMaster(Base):
     __tablename__ = 'iems_user_role_master'
 
     user_role_id = Column(Integer, primary_key=True, nullable=False)
-    user_role = Column(String(45), nullable=False)
-    user_role_description = Column(String(225), nullable=False)
+    # user_role = Column(String(45), nullable=False)
+    role_name = Column(String(200), nullable=False)
+    # user_role_description = Column(String(225), nullable=False)
+    description = Column(Text, nullable=False)
     status = Column(SmallInteger, default=1, nullable=False)
     department_wise = Column(SmallInteger, default=0, nullable=False)
     core_role = Column(Boolean, default=False, nullable=False)

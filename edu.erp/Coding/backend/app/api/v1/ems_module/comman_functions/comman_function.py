@@ -25,7 +25,7 @@ from .....db.models import Caste, City, Country, IEMExamEvent, IEMExamHallMaster
     IEMSEventTypeMaster, IEMSProgressionRules, IEMSTemplate, IEMSTtDaysSet, IEMSUserCourseMgmt, IEMSUserRoleMaster, \
     IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, \
     State, StudentCourse
-from ...cudo_module.bloom_domain.model.bloom_domain_model import BloomDomain
+# from ...cudo_module.bloom_domain.model.bloom_domain_model import BloomDomain
 from .....utils.auth_helper import get_current_user
 from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool
@@ -994,15 +994,15 @@ def fetch_section_list_service(section_request, db: Session, current_user: str):
     return results
 
 
-# @router.get("/get_physically_challenged_descriptions")
-# def get_physically_challenged_descriptions(current_user: str = Depends(get_current_user),org_id: int = Header(...),
-# db: Session = Depends(get_db)):
-#     try:
-#         descriptions = db.query(PhysicallyChallengedDescription).all()
-#         data = [{"pc_description_id": desc.pc_description_id, "description": desc.description} for desc in descriptions]
-#         return returnSuccess(data)
-#     except Exception as e:
-#         raise e
+@router.get("/get_physically_challenged_descriptions")
+def get_physically_challenged_descriptions(current_user: str = Depends(get_current_user),org_id: int = Header(...),
+db: Session = Depends(get_db)):
+    try:
+        descriptions = db.query(PhysicallyChallengedDescription).all()
+        data = [{"pc_description_id": desc.pc_description_id, "description": desc.description} for desc in descriptions]
+        return returnSuccess(data)
+    except Exception as e:
+        raise e
 
 @router.get("/country_list")
 def country_list(
