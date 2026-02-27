@@ -3,7 +3,7 @@ from .api.v1.routes import router as api_router
 from fastapi.middleware.cors import CORSMiddleware
 from .db.models import Base
 from .core.database import engine
-from app.api.v1.cudo_module.bloom_level import bloom_level as bloom_level_routes
+#from app.api.v1.cudo_module.bloom_level import bloom_level as bloom_level_routes
 
 # Disabled auto table creation - database schema is already finalized in HeidiSQL
 # Base.metadata.create_all(bind=engine)
@@ -32,11 +32,12 @@ app.add_middleware(
 
 app.include_router(api_router)
 
-app.include_router(
-    bloom_level_routes.router,
-    prefix="/api/v1/cudo_module", 
-    tags=["Bloom Level"]
-)
+# cudo_module route include commented out because module is missing
+#app.include_router(
+#    bloom_level_routes.router,
+#    prefix="/api/v1/cudo_module", 
+#    tags=["Bloom Level"]
+#)
 
 app.include_router(api_router, prefix="/api/v1")
 

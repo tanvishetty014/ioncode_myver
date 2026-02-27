@@ -246,7 +246,7 @@ def get_department_permission(user_id: int, current_user: str, db: Session) -> b
     """
     # Query to check the user's roles
     result = (db.query(IEMSUserRoleMaster.department_wise)
-                .join(IEMSUserRoles, IEMSUserRoles.role_id == IEMSUserRoleMaster.user_role_id)
+                .join(IEMSUserRoles, IEMSUserRoles.userrole_id == IEMSUserRoleMaster.user_role_id)
                 .filter(IEMSUserRoles.user_id == user_id)
                 .first())
     
@@ -343,13 +343,13 @@ def get_education_details(db: Session):
     except Exception as e:
         raise e
 
-# def get_physically_challenged_descriptions(db: Session):
-#     try:
-#         descriptions = db.query(PhysicallyChallengedDescription).all()
-#         data = [{"pc_description_id": desc.pc_description_id, "description": desc.description} for desc in descriptions]
-#         return data
-#     except Exception as e:
-#         raise e
+def get_physically_challenged_descriptions(db: Session):
+    try:
+        descriptions = db.query(PhysicallyChallengedDescription).all()
+        data = [{"pc_description_id": desc.pc_description_id, "description": desc.description} for desc in descriptions]
+        return data
+    except Exception as e:
+        raise e
     
 def get_physically_challenged(db: Session):
     try:

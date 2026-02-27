@@ -2912,7 +2912,8 @@ class IEMSUserPermissions(Base):
 class IEMSUserRoles(Base):
     __tablename__ = 'iems_user_roles'
 
-    userrole_id = Column(Integer, primary_key=True, nullable=False)
+    # Map Python attribute `userrole_id` to database column `user_role_id`
+    userrole_id = Column("user_role_id", Integer, primary_key=True, nullable=False)
     user_id = Column(Integer, nullable=False)
     role_id = Column(Integer, nullable=False)
     org_id = Column(Integer, default=1, nullable=True)
