@@ -1,5 +1,8 @@
 from fastapi import APIRouter
 from ...api.auth import login
+from .announcement import router as announcement_router
+
+
 # from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
 #     router as curriculum_delivery_router
 # )
@@ -382,6 +385,12 @@ from ...api.v1.ems_module.comman_functions import comman_function
 
 router = APIRouter()
 
+
+router.include_router(
+    announcement_router,
+    prefix="/announcements",
+    tags=["Announcements"]
+)
 # router.include_router(
 #     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
 # )
@@ -400,6 +409,8 @@ router = APIRouter()
 # )
 
 ## Below include all modules routes
+
+
 
 # Include auth routes
 router.include_router(login.router, prefix="/auth", tags=["auth"])

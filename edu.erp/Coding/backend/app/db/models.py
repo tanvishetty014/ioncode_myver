@@ -4012,3 +4012,38 @@ class StudentPayment(Base):
 
     # Relationship with StudentRoomAllotment
     room_allotment = relationship("StudentRoomAllotment", backref="student_payment")
+
+    #Announcement table
+
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy import Date, Time
+
+class Announcement(Base):
+    __tablename__ = "lms_notifications"
+
+    lmsn_id = Column(Integer, primary_key=True, index=True)
+    delivery_date = Column(Date)
+    delivery_time = Column(Time)
+    delivery_hide_date = Column(Date)
+    delivery_hide_time = Column(Time)
+    notify_description = Column(Text)
+    notify_attachment = Column(String(255))
+    notify_document_url = Column(Text)
+    display_to_timetable = Column(Integer, default=0)
+    created_by = Column(Integer)
+    created_at = Column(DateTime)
+
+
+class StudentNotificationMap(Base):
+    __tablename__ = "lms_map_student_notifications"
+
+    lms_msn_id = Column(Integer, primary_key=True, index=True)
+    lmsn_id = Column(Integer)  # EXACT name from table
+    lmsn_det_id = Column(Integer)
+    ssd_id = Column(Integer)
+    student_usn = Column(String(50))
+    notify_seen_flag = Column(Integer, default=0)
+    notify_seenon_datetime = Column(DateTime)
+    created_by = Column(Integer)
+    created_at = Column(DateTime)
