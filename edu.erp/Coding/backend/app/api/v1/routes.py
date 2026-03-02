@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from ...api.auth import login
 from .announcement import router as announcement_router
+from .manage_assignment import router as manage_assignment_router
 
 
 # from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
@@ -390,6 +391,11 @@ router.include_router(
     announcement_router,
     prefix="/announcements",
     tags=["Announcements"]
+)
+router.include_router(
+    manage_assignment_router,
+    prefix="/manage-assignment",
+    tags=["Manage Assignment"]
 )
 # router.include_router(
 #     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
