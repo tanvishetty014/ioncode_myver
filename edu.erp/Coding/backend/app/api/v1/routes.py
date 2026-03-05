@@ -2,6 +2,9 @@ from fastapi import APIRouter
 from ...api.auth import login
 from .announcement import router as announcement_router
 from .manage_assignment import router as manage_assignment_router
+from app.access_control.api.curriculum import router as curriculum_router
+from app.access_control.api.timetable import router as timetable_router
+from app.access_control.api.scheduled_classes import router as scheduled_classes_router
 
 
 # from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
@@ -431,6 +434,10 @@ router.include_router(login.router, prefix="/staff_student_login", tags=["auth"]
 
 # Include routes for comman function  module
 router.include_router(comman_function.router, prefix="/comman_function", tags=["auth"])
+
+router.include_router(curriculum_router)
+router.include_router(timetable_router)
+router.include_router(scheduled_classes_router)
 
 # Include routes for configuration module
 # router.include_router(all_master.router, prefix="/all_master", tags=["auth"])

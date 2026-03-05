@@ -38,5 +38,3 @@ def get_sections(crclm_id: int, term_name: str, db: Session = Depends(get_db)):
         models.IEMSemTimeTable.term == term_name
     ).distinct().all()
     return [{"section": sec[0]} for sec in sections if sec[0]]
-
-
