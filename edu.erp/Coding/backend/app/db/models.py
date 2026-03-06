@@ -4047,3 +4047,21 @@ class StudentNotificationMap(Base):
     notify_seenon_datetime = Column(DateTime)
     created_by = Column(Integer)
     created_at = Column(DateTime)
+
+
+class LMSLessonSchedule(Base):
+    __tablename__ = "lms_lesson_schedule"
+
+    lls_id = Column(Integer, primary_key=True, autoincrement=True)
+
+    academic_batch_id = Column(Integer)
+    semester_id = Column(Integer)
+    crs_id = Column(Integer)
+    section_id = Column(Integer)
+
+    plan_date = Column(Date)
+    start_time = Column(String(45))
+    end_time = Column(String(45))
+
+    created_by = Column(Integer)
+    status = Column(Integer, default=0)
