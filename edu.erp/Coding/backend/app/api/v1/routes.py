@@ -3,7 +3,8 @@ print("✅ V1 ROUTES LOADED")
 from fastapi import APIRouter
 from ...api.auth import login
 from app.api.v1.topic_management import topic_routes
-
+from ...api.v1.ems_module.configurations.department import department
+from ...api.v1.ems_module.comman_functions import comman_function
 router = APIRouter()
 
 

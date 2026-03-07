@@ -7,6 +7,12 @@ import enum
 
 Base = declarative_base()
 
+# ============================================================
+# CUDOS TOPIC MODEL
+# Table: cudos_topic
+# Purpose: Master table for storing topic information
+# Used in: Topic management APIs for CRUD operations
+# ============================================================
 class CudosTopic(Base):
     __tablename__ = "cudos_topic"
 
@@ -4050,3 +4056,122 @@ class BloomDomain(Base):
     create_date = Column(DateTime, nullable=True)
     modified_by = Column(Integer, nullable=True)
     modify_date = Column(DateTime, nullable=True)
+
+
+# ============================================================
+# 1️⃣ LMS Map Instructor Topic
+# Table: lms_map_instructor_topic
+# ============================================================
+class LMSMapInstructorTopic(Base):
+    __tablename__ = 'lms_map_instructor_topic'
+
+    inst_map_id = Column(Integer, primary_key=True, autoincrement=True)
+    academic_batch_id = Column(Integer, nullable=False)
+    semester_id = Column(Integer, nullable=False)
+    crs_id = Column(Integer, nullable=False)
+    section_id = Column(Integer, nullable=False)
+    topic_id = Column(Integer, nullable=False)
+    instructor_id = Column(Integer, nullable=True)
+    status = Column(Integer, nullable=False, default=0)
+
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# ============================================================
+# 2️⃣ LMS Lesson Schedule
+# Table: lms_lesson_schedule
+# ============================================================
+class LMSLessonSchedule(Base):
+    __tablename__ = 'lms_lesson_schedule'
+
+    lls_id = Column(Integer, primary_key=True, autoincrement=True)
+    conduction_date = Column(Date, nullable=True)
+    actual_delivery_date = Column(Date, nullable=True)
+
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# ============================================================
+# 3️⃣ LMS Lesson Schedule Topic Mapping
+# Table: lms_ls_topic_map
+# ============================================================
+class LMSLsTopicMap(Base):
+    __tablename__ = 'lms_ls_topic_map'
+
+    lls_topic_map_id = Column(Integer, primary_key=True, autoincrement=True)
+    lls_id = Column(Integer, nullable=False)
+    topic_id = Column(Integer, nullable=False)
+
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# ============================================================
+# 4️⃣ Map Course To Course Instructor
+# Table: map_courseto_course_instructor
+# ============================================================
+
+class MapCourseToCourseInstructor(Base):
+    __tablename__ = "map_courseto_course_instructor"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    academic_batch_id = Column(Integer, nullable=False)
+    semester_id = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    instructor_id = Column(Integer, nullable=True)
+    section_id = Column(Integer, nullable=True)
+
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# ============================================================
+# 5️⃣ Topic Lesson Schedule
+# Table: topic_lesson_schedule
+# ============================================================
+
+class TopicLessonSchedule(Base):
+    __tablename__ = "topic_lesson_schedule"
+    
+    lesson_schedule_id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    academic_batch_id = Column(Integer, nullable=False)
+    semester_id = Column(Integer)
+    course_id = Column(Integer, nullable=False)
+    topic_id = Column(Integer, nullable=False)
+    
+    portion_ref = Column(String(8))
+    portion_per_hour = Column(String(2000))
+    
+    conduction_date = Column(Date)
+    actual_delivery_date = Column(Date)
+    
+    created_by = Column(Integer)
+    modified_by = Column(Integer)
+    
+    created_date = Column(DateTime, default=datetime.utcnow)
+    modified_date = Column(DateTime, onupdate=datetime.utcnow)
+# ============================================================
+# 6️⃣ LMS Map Portion LS
+# Table: lms_map_portion_ls
+# ============================================================
+class LMSMapPortionLS(Base):
+    __tablename__ = 'lms_map_portion_ls'
+
+    portion_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic_id = Column(Integer, nullable=False)
+    marks_expt = Column(Float, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
