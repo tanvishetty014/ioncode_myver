@@ -22,7 +22,7 @@ import re
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # Define public URLs that do NOT require authentication
 PUBLIC_URLS = [
@@ -265,23 +265,24 @@ async def authorize(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ):
-    token = credentials.credentials
-    payload = decode_jwt(token)
+    # Auth disabled - return None to bypass authentication
+    # To re-enable, remove the return None and uncomment the code below
+    return None
+    
+    # if not credentials:
+    #     raise HTTPException(status_code=401, detail="Authentication required")
+    # token = credentials.credentials
+    # payload = decode_jwt(token)
 
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    # if not payload:
+    #     raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    user = db.query(User).filter(User.id == payload["sub"]).first()
+    # user = db.query(User).filter(User.id == payload["sub"]).first()
 
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+    # if not user:
+    #     raise HTTPException(status_code=401, detail="User not found")
 
-    # this will return user data along with user roles
-    # user_data = UserResponse.model_validate(user).model_dump()
-
-    # await self.validate_session(db, request, token, payload["sub"])
-
-    return user
+    # return user
 
 
 def role_required(*roles: str):
@@ -289,20 +290,23 @@ def role_required(*roles: str):
         credentials: HTTPAuthorizationCredentials = Depends(security),
         db: Session = Depends(get_db),
     ):
-        token = credentials.credentials
-        payload = decode_jwt(token)
-        user_id = payload.get("sub")
-
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        # Check if user has the required role
-        if not has_role(db, user_id, roles):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Access denied. Required role: {roles}",
-            )
-
+        # Auth disabled - bypass role check
         return True
+        
+        # token = credentials.credentials
+        # payload = decode_jwt(token)
+        # user_id = payload.get("sub")
+
+        # if not user_id:
+        #     raise HTTPException(status_code=401, detail="Invalid token")
+
+        # # Check if user has the required role
+        # if not has_role(db, user_id, roles):
+        #     raise HTTPException(
+        #         status_code=403,
+        #         detail=f"Access denied. Required role: {roles}",
+        #     )
+
+        # return True
 
     return dependency

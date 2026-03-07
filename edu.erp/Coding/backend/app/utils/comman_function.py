@@ -23,7 +23,7 @@ def fetch_role_list(db: Session):
         IEMSUserRoleMaster.user_role_id != 5
     ).all()
 
-    return [{"user_role_id": role.user_role_id, "user_role": role.user_role} for role in roles]
+    return [{"user_role_id": role.user_role_id, "user_role": role.role_name} for role in roles]
 
 def get_user_designation(db: Session):
     designations = db.query(IEMSUserDesignation).all()

@@ -23,6 +23,9 @@ from app.access_control.api.user_role_permissions import (
 )
 from app.access_control.api.user_roles import router as user_roles
 from app.access_control.api.permissions import router as permissions
+from app.access_control.api.curriculum import router as curriculum
+from app.access_control.api.timetable import router as timetable
+from app.access_control.api.scheduled_classes import router as scheduled_classes
 
 # from app.access_control.middleware.auth_middleware import authorize
 
@@ -47,3 +50,6 @@ router.include_router(university)
 router.include_router(user_permissions)
 router.include_router(user_sessions)
 router.include_router(permissions)
+router.include_router(curriculum)
+router.include_router(timetable)
+router.include_router(scheduled_classes)

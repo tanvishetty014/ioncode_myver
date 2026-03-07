@@ -5,10 +5,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from urllib.parse import quote
+from pathlib import Path
 # from ..core.constants import DB_USERNAME, DB_PASSWORD, DB_HOST, DB_NAME,DB_PORT
 
-dotenv_path = os.path.join(".env")
-load_dotenv(dotenv_path=dotenv_path)
+project_root = Path(__file__).resolve().parents[2]
+dotenv_path = project_root / ".env"
+if dotenv_path.exists():
+    load_dotenv(dotenv_path=dotenv_path)
+else:
+    load_dotenv()
 
 
 DB_USERNAME = os.getenv("DB_USERNAME") or ""
@@ -16,6 +21,11 @@ DB_PASSWORD = os.getenv("DB_PASSWORD") or ""
 DB_HOST = os.getenv("DB_HOST") or ""
 DB_PORT = int(os.getenv("DB_PORT", 3307))
 DB_NAME = os.getenv("DB_NAME") or ""
+DB_USERNAME = os.getenv("DB_USERNAME")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = int(os.getenv("DB_PORT", 3306))
+DB_NAME = os.getenv("DB_NAME", "").strip()
 
 # URL encode the password to handle special characters like @
 ENCODED_PASSWORD = quote(DB_PASSWORD, safe='')
