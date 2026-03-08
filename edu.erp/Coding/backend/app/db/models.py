@@ -4086,17 +4086,17 @@ class LMSMapInstructorTopic(Base):
 # 2️⃣ LMS Lesson Schedule
 # Table: lms_lesson_schedule
 # ============================================================
-class LMSLessonSchedule(Base):
-    __tablename__ = 'lms_lesson_schedule'
+# class LMSLessonSchedule(Base):
+#     __tablename__ = 'lms_lesson_schedule'
 
-    lls_id = Column(Integer, primary_key=True, autoincrement=True)
-    conduction_date = Column(Date, nullable=True)
-    actual_delivery_date = Column(Date, nullable=True)
+#     lls_id = Column(Integer, primary_key=True, autoincrement=True)
+#     conduction_date = Column(Date, nullable=True)
+#     actual_delivery_date = Column(Date, nullable=True)
 
-    created_by = Column(Integer, nullable=True)
-    modified_by = Column(Integer, nullable=True)
-    created_date = Column(DateTime, nullable=True)
-    modified_date = Column(DateTime, nullable=True)
+#     created_by = Column(Integer, nullable=True)
+#     modified_by = Column(Integer, nullable=True)
+#     created_date = Column(DateTime, nullable=True)
+#     modified_date = Column(DateTime, nullable=True)
 
 
 # ============================================================
@@ -4214,18 +4214,26 @@ class StudentNotificationMap(Base):
 
 
 class LMSLessonSchedule(Base):
-    __tablename__ = "lms_lesson_schedule"
+    __tablename__ = 'lms_lesson_schedule'
 
     lls_id = Column(Integer, primary_key=True, autoincrement=True)
-
-    academic_batch_id = Column(Integer)
-    semester_id = Column(Integer)
-    crs_id = Column(Integer)
-    section_id = Column(Integer)
-
-    plan_date = Column(Date)
-    start_time = Column(String(45))
-    end_time = Column(String(45))
-
-    created_by = Column(Integer)
+    
+    # Fields from Version B (Planning)
+    academic_batch_id = Column(Integer, nullable=True)
+    semester_id = Column(Integer, nullable=True)
+    crs_id = Column(Integer, nullable=True)
+    section_id = Column(Integer, nullable=True)
+    plan_date = Column(Date, nullable=True)
+    start_time = Column(String(45), nullable=True)
+    end_time = Column(String(45), nullable=True)
     status = Column(Integer, default=0)
+
+    # Fields from Version A (Actual Execution)
+    conduction_date = Column(Date, nullable=True)
+    actual_delivery_date = Column(Date, nullable=True)
+
+    # Combined Audit Fields
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)

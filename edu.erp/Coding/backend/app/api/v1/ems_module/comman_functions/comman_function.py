@@ -26,10 +26,7 @@ from .....db.models import BloomDomain, Caste, City, Country, IEMExamEvent, IEME
     IEMSEventTypeMaster, IEMSProgressionRules, IEMSTemplate, IEMSTtDaysSet, IEMSUserCourseMgmt, IEMSUserRoleMaster, \
     IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, LMSLessonSchedule, \
     State, StudentCourse
-<<<<<<< HEAD
-=======
-# from ...cudo_module.bloom_domain.model.bloom_domain_model import BloomDomain
->>>>>>> 9f26bce784e3747fea6cc5c6951f86e7656a7d10
+
 from .....utils.auth_helper import get_current_user
 from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool

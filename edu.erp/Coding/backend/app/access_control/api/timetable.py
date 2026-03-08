@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query  # Added Query here
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
@@ -54,24 +54,41 @@ def delete_timetable(sem_time_table_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Timetable not found")
     return None
 
-# 2. RESET TIMETABLE DATES (Amended to match Service Logic)
+# 2. RESET TIMETABLE DATES
 @router.patch("/{sem_time_table_id}/reset-dates")
 def reset_timetable(sem_time_table_id: int, db: Session = Depends(get_db)):
-    # This calls the logic to clear specific date entries from the calendar
     success = timetable_service.reset_timetable_dates_logic(db, sem_time_table_id)
     if not success:
         raise HTTPException(status_code=404, detail="Timetable ID not found")
     return {"message": "Timetable dates reset successfully"}
 
-# 3. COPY CLASS DAY
+# 3. COPY CLASS DAY (UPDATED WITH FRIEND'S FIXES)
 @router.post("/copy-day")
-def copy_day(source_date: date, target_date: date, section: str, db: Session = Depends(get_db)):
+def copy_day(
+    source_date: date = Query(...), 
+    target_date: date = Query(...), 
+    section: str = Query(...), 
+    db: Session = Depends(get_db)
+):
+    # Call the service logic
     count = timetable_service.copy_class_day_logic(db, source_date, target_date, section)
+    
+    # Logic Fix: If count is 0, it means nothing was found to copy. 
+    # Instead of a success message, we throw a 404 error.
+    if count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"No classes found for section {section} on {source_date} to copy."
+        )
+        
     return {"message": f"Successfully copied {count} classes to {target_date}"}
 
-# 4. SYNC DATES (ADD/DELETE BASED ON RANGE - Amended function name)
+# 4. SYNC DATES
 @router.patch("/{sem_time_table_id}/sync-range")
-def sync_dates(sem_time_table_id: int, end_date: date, db: Session = Depends(get_db)):
-    # This deletes classes that fall outside the new end_date
+def sync_dates(
+    sem_time_table_id: int, 
+    end_date: date = Query(...), # Added Query here as well for consistency
+    db: Session = Depends(get_db)
+):
     deleted_count = timetable_service.sync_timetable_dates_logic(db, sem_time_table_id, end_date)
     return {"message": f"Sync complete. {deleted_count} classes removed beyond the new date range."}
