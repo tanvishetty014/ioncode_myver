@@ -2349,6 +2349,24 @@ class DuplicateRequest(BaseModel):
     end_time: str
 
 
+class MapLessonRequest(BaseModel):
+    topic_id: int
+    lesson_schedule_id: int
+    planned_date: date
+    start_time: str
+    end_time: str
+    status: int
+
+
+class ExtraClassRequest(BaseModel):
+    course_id: int
+    section_id: int
+    faculty_id: int
+    date: date
+    start_time: str
+    end_time: str
+
+
 # ---------------- APIs ----------------
 
 @router.get("/course-types")
@@ -2562,4 +2580,297 @@ def export_timetable_pdf(
         media_type="application/pdf",
         filename="timetable.pdf"
     )
+
+
+@router.get("/scheduled-classes")
+def fetch_scheduled_classes(db: Session = Depends(get_db)):
+    """
+    Returns scheduled classes for timetable calendar.
+    """
+    try:
+        query = text(
+            """
+            SELECT
+                tt.time_table_id AS timetable_id,
+                tt.crs_id AS course_id,
+                bm.batch_id AS batch_id,
+                wd.week_day_name AS weekday,
+                tt.class_start_time AS start_time,
+                tt.class_end_time AS end_time
+            FROM lms_tt_time_table tt
+            JOIN lms_tt_time_table_details dt
+                ON dt.tt_detail_id = tt.tt_detail_id
+            JOIN lms_tt_time_table_batch_map bm
+                ON bm.time_table_id = tt.time_table_id
+            JOIN lms_tt_time_table_day_mapping dm
+                ON dm.time_table_id = tt.time_table_id
+            JOIN lms_tt_weekdays wd
+                ON wd.day_id = dm.day_id
+            ORDER BY wd.days_order, tt.class_start_time;
+            """
+        )
+
+        rows = db.execute(query).mappings().all()
+        return returnSuccess(list(rows))
+    except Exception as e:
+        raise e
+
+
+@router.post("/map-lesson")
+def map_lesson_schedule(
+        payload: MapLessonRequest,
+        current_user: dict = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """
+    Maps a topic to a lesson schedule into lms_map_portion_ls.
+    """
+    try:
+        portion_sql = text(
+            """
+            SELECT portion_per_hour
+            FROM topic_lesson_schedule
+            WHERE lesson_schedule_id = :lesson_schedule_id
+            """
+        )
+
+        portion_per_hour = db.execute(
+            portion_sql,
+            {"lesson_schedule_id": payload.lesson_schedule_id},
+        ).scalar()
+
+        insert_sql = text(
+            """
+            INSERT INTO lms_map_portion_ls
+                (topic_id, lesson_schedule_id, portion_per_hour, planned_date, start_time, end_time, status,
+                 created_by, created_date)
+            VALUES
+                (:topic_id, :lesson_schedule_id, :portion_per_hour, :planned_date, :start_time, :end_time, :status,
+                 :created_by, :created_date)
+            """
+        )
+
+        db.execute(
+            insert_sql,
+            {
+                "topic_id": payload.topic_id,
+                "lesson_schedule_id": payload.lesson_schedule_id,
+                "portion_per_hour": portion_per_hour,
+                "planned_date": payload.planned_date,
+                "start_time": payload.start_time,
+                "end_time": payload.end_time,
+                "status": payload.status,
+                "created_by": current_user.get("user_id"),
+                "created_date": datetime.now(),
+            },
+        )
+        db.commit()
+
+        return returnSuccess("Lesson schedule mapped successfully.")
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+@router.post("/add-extra-class")
+def add_extra_class(
+        payload: ExtraClassRequest,
+        current_user: dict = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """
+    Adds an extra class into timetable tables after duplicate time-slot validation.
+    """
+    try:
+        # Check for duplicate time slot for same course, section, faculty and date/time
+        duplicate_check_sql = text(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM lms_tt_time_table tt
+            JOIN lms_tt_time_table_details dt
+                ON dt.tt_detail_id = tt.tt_detail_id
+            JOIN lms_tt_time_table_batch_map bm
+                ON bm.time_table_id = tt.time_table_id
+            WHERE tt.crs_id = :course_id
+              AND dt.section_id = :section_id
+              AND dt.tt_start_date = :class_date
+              AND tt.class_start_time = :start_time
+              AND tt.class_end_time = :end_time
+            """
+        )
+
+        duplicate_row = db.execute(
+            duplicate_check_sql,
+            {
+                "course_id": payload.course_id,
+                "section_id": payload.section_id,
+                "faculty_id": payload.faculty_id,
+                "class_date": payload.date,
+                "start_time": payload.start_time,
+                "end_time": payload.end_time,
+            },
+        ).first()
+
+        if duplicate_row and duplicate_row[0] > 0:
+            return returnException("An extra class already exists for the same time slot.")
+
+        # Step 1 — Fetch academic_batch_id and semester_id for the section
+        section_row = db.execute(
+            text(
+                """
+                SELECT academic_batch_id, semester_id
+                FROM iems_section
+                WHERE id = :section_id
+                """
+            ),
+            {"section_id": payload.section_id},
+        ).mappings().first()
+
+        academic_batch_id = section_row["academic_batch_id"]
+        semester_id = section_row["semester_id"]
+
+        # Step 2 — Insert into timetable details to generate tt_detail_id
+        insert_dt_sql = text(
+            """
+            INSERT INTO lms_tt_time_table_details
+                (academic_batch_id, semester_id, section_id, tt_start_date, tt_end_date,
+                 tt_start_time, tt_end_time, tt_time_slot_gap, created_by, created_date)
+            VALUES
+                (:academic_batch_id, :semester_id, :section_id, :class_date, :class_date,
+                 :start_time, :end_time, '0', :created_by, :created_date)
+            """
+        )
+        dt_result = db.execute(
+            insert_dt_sql,
+            {
+                "academic_batch_id": academic_batch_id,
+                "semester_id": semester_id,
+                "section_id": payload.section_id,
+                "class_date": payload.date,
+                "start_time": payload.start_time,
+                "end_time": payload.end_time,
+                "created_by": current_user.get("user_id"),
+                "created_date": datetime.now(),
+            },
+        )
+        tt_detail_id = dt_result.lastrowid
+
+        day_id = payload.date.weekday() + 1
+
+        crs_code = db.execute(
+            text(
+                """
+                SELECT crs_code FROM iems_courses WHERE crs_id = :course_id
+                """
+            ),
+            {"course_id": payload.course_id},
+        ).scalar()
+
+        # Step 2 — Insert into main timetable table using tt_detail_id
+        insert_tt_sql = text(
+            """
+            INSERT INTO lms_tt_time_table
+                (tt_detail_id, crs_id, crs_code, day_id, class_start_time, class_end_time,
+                 extra_class_flag, created_by, created_date)
+            VALUES
+                (:tt_detail_id, :course_id, :crs_code, :day_id, :start_time, :end_time,
+                 1, :created_by, :created_date)
+            """
+        )
+
+        tt_result = db.execute(
+            insert_tt_sql,
+            {
+                "tt_detail_id": tt_detail_id,
+                "course_id": payload.course_id,
+                "crs_code": crs_code,
+                "day_id": day_id,
+                "start_time": payload.start_time,
+                "end_time": payload.end_time,
+                "created_by": current_user.get("user_id"),
+                "created_date": datetime.now(),
+            },
+        )
+        time_table_id = tt_result.lastrowid
+
+        # Step 3 — Map timetable to batch/section
+        insert_bm_sql = text(
+            """
+            INSERT INTO lms_tt_time_table_batch_map
+                (time_table_id, tt_detail_id, batch_id, crs_id,
+                 created_by, created_date)
+            VALUES
+                (:time_table_id, :tt_detail_id, :section_id, :course_id,
+                 :created_by, :created_date)
+            """
+        )
+        db.execute(
+            insert_bm_sql,
+            {
+                "time_table_id": time_table_id,
+                "tt_detail_id": tt_detail_id,
+                "section_id": payload.section_id,
+                "course_id": payload.course_id,
+                "created_by": current_user.get("user_id"),
+                "created_date": datetime.now(),
+            },
+        )
+
+        db.commit()
+        return returnSuccess("Extra class added successfully.")
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+@router.get("/topics")
+def fetch_topics_and_lesson_schedule(db: Session = Depends(get_db)):
+    """
+    Fetch topics with their lesson schedule details.
+    """
+    try:
+        query = text(
+            """
+            SELECT
+                t.topic_id AS topic_id,
+                t.topic_title AS topic_name,
+                ls.lesson_schedule_id AS lesson_schedule_id,
+                ls.portion_per_hour AS portion_per_hour
+            FROM cudos_topic t
+            LEFT JOIN topic_lesson_schedule ls
+                ON ls.topic_id = t.topic_id
+            ORDER BY t.topic_id DESC
+            """
+        )
+
+        rows = db.execute(query).mappings().all()
+        return returnSuccess(list(rows))
+    except Exception as e:
+        raise e
+
+
+@router.get("/students")
+def get_student_list(db: Session = Depends(get_db)):
+    """
+    Returns student list with mapped course and section.
+    """
+    try:
+        query = text(
+            """
+            SELECT
+                s.student_id AS student_id,
+                s.name AS student_name,
+                m.section_id AS section_id,
+                m.crs_id AS course_id
+            FROM cudos_map_courseto_student m
+            JOIN iems_students s
+                ON s.student_id = m.student_id
+            WHERE IFNULL(s.status, 1) = 1
+            """
+        )
+
+        rows = db.execute(query).mappings().all()
+        return returnSuccess(list(rows))
+    except Exception as e:
+        raise e
 
