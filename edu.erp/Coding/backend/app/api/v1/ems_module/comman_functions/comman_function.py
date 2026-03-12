@@ -1,8 +1,9 @@
 from typing import Dict, Optional
 from fastapi import APIRouter, Depends, Header
+from pydantic import BaseModel
 from sqlalchemy import and_, or_, asc, distinct, func, text, update
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, date
 
 from app.utils.set_password_helper import set_private_password, validate_old_password
 from .comman_function_utils import attendance_processing, cia_evaluate_processing, cia_processing, cia_see_processing, \
@@ -18,14 +19,14 @@ from .comman_function_schema import AcademicBatchRequest, BatchCycleFilter, Bloo
     ParamRequestModel, DepartmentListReq, ProgramTypeListReq, ResultYearRequest, SectionRequest, SemesterCheckRequest, \
     SemesterRequest, SetApproveRequest, SoftDeleteRequest, StateRequest, StudentProgramRequest, \
     StudentSectionListRequest, ComputeOpenElectiveCIARequest, StudentCourseRequestParams
-from .....db.models import Caste, City, Country, IEMExamEvent, IEMExamHallMaster, IEMExamSession, IEMGrade, \
+from .....db.models import BloomDomain, Caste, City, Country, IEMExamEvent, IEMExamHallMaster, IEMExamSession, IEMGrade, \
     IEMLabCourseBatch, IEMOrgConfigs, IEMOrganisation, IEMParentsOccupationMaster, IEMSAcademicBatch, IEMSBatchCycle, \
     IEMSCIAExamMaster, IEMSCIAStudentCourses, IEMSCIOccasionType, IEMSClassTimings, IEMSCourseType, IEMSCourses, \
     IEMSCrsFaculty, IEMSEventCalenderDetails, IEMSEventStatus, IEMSDepartment, IEMProgramType, IEMProgram, \
     IEMSEventTypeMaster, IEMSProgressionRules, IEMSTemplate, IEMSTtDaysSet, IEMSUserCourseMgmt, IEMSUserRoleMaster, \
-    IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, \
+    IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, LMSLessonSchedule, \
     State, StudentCourse
-# from ...cudo_module.bloom_domain.model.bloom_domain_model import BloomDomain
+
 from .....utils.auth_helper import get_current_user
 from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool
@@ -2315,3 +2316,250 @@ def is_backlog_with_cia_see_db(db: Session, current_user: str, org_id: int):
     )
     rowcount = query.count()
     return rowcount
+
+# ---------------- REQUEST MODELS ----------------
+
+class CourseRequest(BaseModel):
+    course_type_id: int
+    academic_batch_id: int
+
+
+class BatchSectionRequest(BaseModel):
+    academic_batch_id: int
+    semester_id: int
+
+
+class ScheduleRequest(BaseModel):
+    academic_batch_id: int
+    semester_id: int
+    crs_id: int
+    section_id: int
+    plan_date: date
+    start_time: str
+    end_time: str
+    created_by: int
+
+
+class DuplicateRequest(BaseModel):
+    academic_batch_id: int
+    semester_id: int
+    section_id: int
+    plan_date: date
+    start_time: str
+    end_time: str
+
+
+# ---------------- APIs ----------------
+
+@router.get("/course-types")
+def list_course_types(db: Session = Depends(get_db)):
+    course_types = db.query(IEMSCourses.course_type_id).distinct().all()
+
+    return {
+        "status": True,
+        "data": [ct.course_type_id for ct in course_types]
+    }
+
+
+@router.post("/courses")
+def list_courses(request: CourseRequest, db: Session = Depends(get_db)):
+
+    courses = db.query(IEMSCourses).filter(
+        IEMSCourses.course_type_id == request.course_type_id,
+        IEMSCourses.academic_batch_id == request.academic_batch_id
+    ).all()
+
+    return {
+        "status": True,
+        "data": [dict(row.__dict__) for row in courses]
+    }
+
+
+@router.post("/batch-sections")
+def list_batch_sections(request: BatchSectionRequest, db: Session = Depends(get_db)):
+
+    batch = db.query(IEMSAcademicBatch).filter(
+        IEMSAcademicBatch.academic_batch_id == request.academic_batch_id
+    ).first()
+
+    sections = db.query(IEMSection).filter(
+        IEMSection.academic_batch_id == request.academic_batch_id,
+        IEMSection.semester_id == request.semester_id
+    ).all()
+
+    return {
+        "status": True,
+        "batch": batch.__dict__ if batch else None,
+        "sections": [dict(row.__dict__) for row in sections]
+    }
+
+
+@router.post("/schedule-class")
+def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
+
+    duplicate = db.query(LMSLessonSchedule).filter(
+        LMSLessonSchedule.academic_batch_id == request.academic_batch_id,
+        LMSLessonSchedule.semester_id == request.semester_id,
+        LMSLessonSchedule.section_id == request.section_id,
+        LMSLessonSchedule.plan_date == request.plan_date,
+        LMSLessonSchedule.start_time == request.start_time,
+        LMSLessonSchedule.end_time == request.end_time
+    ).first()
+
+    if duplicate:
+        return {
+            "status": False,
+            "message": "Duplicate class already scheduled for same timing"
+        }
+
+    new_schedule = LMSLessonSchedule(
+        academic_batch_id=request.academic_batch_id,
+        semester_id=request.semester_id,
+        crs_id=request.crs_id,
+        section_id=request.section_id,
+        plan_date=request.plan_date,
+        start_time=request.start_time,
+        end_time=request.end_time,
+        created_by=request.created_by,
+        status=1
+    )
+
+    db.add(new_schedule)
+    db.commit()
+    db.refresh(new_schedule)
+
+    return {
+        "status": True,
+        "message": "Class Scheduled Successfully",
+        "data": new_schedule.__dict__
+    }
+
+
+@router.post("/check-duplicate")
+def check_duplicate(request: DuplicateRequest, db: Session = Depends(get_db)):
+
+    duplicates = db.query(LMSLessonSchedule).filter(
+        LMSLessonSchedule.academic_batch_id == request.academic_batch_id,
+        LMSLessonSchedule.semester_id == request.semester_id,
+        LMSLessonSchedule.section_id == request.section_id,
+        LMSLessonSchedule.plan_date == request.plan_date,
+        LMSLessonSchedule.start_time == request.start_time,
+        LMSLessonSchedule.end_time == request.end_time
+    ).all()
+
+    return {
+        "status": True,
+        "duplicates": [dict(row.__dict__) for row in duplicates]
+    }
+
+
+@router.get("/timetable")
+def get_timetable(
+    academic_batch_id: int,
+    semester_id: int,
+    db: Session = Depends(get_db)
+):
+
+    query = text("""
+        SELECT 
+            s.plan_date,
+            s.start_time,
+            s.end_time,
+            c.crs_title,
+            sec.section,
+            u.full_name AS faculty_name
+        FROM lms_lesson_schedule s
+        LEFT JOIN iems_courses c 
+            ON s.crs_id = c.crs_id
+        LEFT JOIN iems_section sec 
+            ON s.section_id = sec.id
+        LEFT JOIN faculty_time_table ft 
+            ON s.time_table_id = ft.tt_id
+        LEFT JOIN erp_users u 
+            ON ft.faculty_id = u.erp_user_id
+        WHERE s.academic_batch_id = :academic_batch_id
+        AND s.semester_id = :semester_id
+        ORDER BY s.plan_date, s.start_time
+    """)
+
+    result = db.execute(
+        query,
+        {
+            "academic_batch_id": academic_batch_id,
+            "semester_id": semester_id
+        }
+    ).fetchall()
+
+    return [dict(row._mapping) for row in result]
+
+
+from fastapi.responses import FileResponse
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import tempfile
+
+
+@router.get("/timetable/export-pdf")
+def export_timetable_pdf(
+    academic_batch_id: int,
+    semester_id: int,
+    db: Session = Depends(get_db)
+):
+
+    query = text("""
+        SELECT 
+            s.plan_date,
+            s.start_time,
+            s.end_time,
+            c.crs_title,
+            sec.section,
+            u.full_name AS faculty_name
+        FROM lms_lesson_schedule s
+        LEFT JOIN iems_courses c 
+            ON s.crs_id = c.crs_id
+        LEFT JOIN iems_section sec 
+            ON s.section_id = sec.id
+        LEFT JOIN faculty_time_table ft 
+            ON s.time_table_id = ft.tt_id
+        LEFT JOIN erp_users u 
+            ON ft.faculty_id = u.erp_user_id
+        WHERE s.academic_batch_id = :academic_batch_id
+        AND s.semester_id = :semester_id
+        ORDER BY s.plan_date, s.start_time
+    """)
+
+    result = db.execute(
+        query,
+        {
+            "academic_batch_id": academic_batch_id,
+            "semester_id": semester_id
+        }
+    ).fetchall()
+
+    timetable = [dict(row._mapping) for row in result]
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+
+    c = canvas.Canvas(temp_file.name, pagesize=letter)
+
+    y = 750
+    c.setFont("Helvetica", 12)
+    c.drawString(200, 780, "Class Timetable")
+
+    for row in timetable:
+        line = f"{row['plan_date']} | {row['start_time']} - {row['end_time']} | {row['crs_title']} | {row['section']} | {row['faculty_name']}"
+        c.drawString(50, y, line)
+        y -= 20
+
+        if y < 100:
+            c.showPage()
+            y = 750
+
+    c.save()
+
+    return FileResponse(
+        temp_file.name,
+        media_type="application/pdf",
+        filename="timetable.pdf"
+    )
+

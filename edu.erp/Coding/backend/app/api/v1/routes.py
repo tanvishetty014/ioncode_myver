@@ -1,8 +1,20 @@
+
+print("✅ V1 ROUTES LOADED")
 from fastapi import APIRouter
 from ...api.auth import login
+from app.api.v1.topic_management import topic_routes
+from ...api.v1.ems_module.configurations.department import department
+from ...api.v1.ems_module.comman_functions import comman_function
+router = APIRouter()
+
+
+
 from .announcement import router as announcement_router
 from .manage_assignment import router as manage_assignment_router
 from .manage_quiz import router as manage_quiz_router
+from app.access_control.api.curriculum import router as curriculum_router
+from app.access_control.api.timetable import router as timetable_router
+from app.access_control.api.scheduled_classes import router as scheduled_classes_router
 
 
 # from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
@@ -388,6 +400,17 @@ from ...api.v1.ems_module.comman_functions import comman_function
 router = APIRouter()
 
 
+# router.include_router(
+#     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
+# )
+# router.include_router(
+#     curriculum_delivery_router,
+#     prefix="/curriculum/curriculum_delivery_method",
+#     tags=["Curriculum Delivery Method"]
+# )
+
+
+
 router.include_router(
     announcement_router,
     prefix="/announcements",
@@ -412,6 +435,7 @@ router.include_router(
 #     tags=["Curriculum Delivery Method"]
 # )
 
+
 # router.include_router(
 #     user_router, prefix="/user", tags=["User"]
 # )
@@ -427,7 +451,7 @@ router.include_router(
 # Include auth routes
 router.include_router(login.router, prefix="/auth", tags=["auth"])
 # router.include_router(register.router, prefix="/auth", tags=["auth"])
-# router.include_router(refresh_token.router, prefix="/auth", tags=["auth"])
+#router.include_router(refresh_token.router, prefix="/auth", tags=["auth"])
 
 # Include routes for registartion module
 router.include_router(login.router, prefix="/staff_student_login", tags=["auth"])
@@ -438,6 +462,10 @@ router.include_router(login.router, prefix="/staff_student_login", tags=["auth"]
 # Include routes for comman function  module
 router.include_router(comman_function.router, prefix="/comman_function", tags=["auth"])
 
+router.include_router(curriculum_router)
+router.include_router(timetable_router)
+router.include_router(scheduled_classes_router)
+
 # Include routes for configuration module
 # router.include_router(all_master.router, prefix="/all_master", tags=["auth"])
 # router.include_router(user_master.router, prefix="/user_master", tags=["auth"])
@@ -445,6 +473,11 @@ router.include_router(comman_function.router, prefix="/comman_function", tags=["
 # router.include_router(user_access.router, prefix="/user_acccess", tags=["auth"])
 # router.include_router(staff_course_allocation.router, prefix="/user_courses", tags=["auth"])
 router.include_router(department.router, prefix="/department", tags=["auth"])
+router.include_router(
+    topic_routes.router,
+    prefix="/topic",
+    tags=["Topic Management"]
+)
 # router.include_router(program.router, prefix="/program", tags=["auth"])
 # router.include_router(program_type.router, prefix="/program_type", tags=["auth"])
 
@@ -542,7 +575,9 @@ router.include_router(department.router, prefix="/department", tags=["auth"])
 # router.include_router(vehicle_schedule.router, prefix="/transport", tags=['transport'])
 
 
+# Include auth routes with both prefixes for compatibility
 router.include_router(login.router, prefix="/staff_student_login", tags=["Login"])
+router.include_router(login.router, prefix="/auth", tags=["Auth"])
 
 # Include routes for dashboard module
 # router.include_router(
@@ -949,6 +984,7 @@ router.include_router(
 #     tags=["Board Of Studies"]
 # )
 
+# include DELIVERY METHOD
 # # include DELIVERY METHOD
 # router.include_router(
 #     delivery_method_router,
@@ -963,7 +999,8 @@ router.include_router(
 #     tags=["Map Level Weightage"]
 # )
 
-# # include PROGRAM OUTCOME
+
+#  include PROGRAM OUTCOME 
 # router.include_router(
 #     program_outcome_router,
 #     prefix="/program_outcome",
@@ -987,6 +1024,7 @@ router.include_router(
 #     tags=["Generic Program Outcome"]
 # )
 
+# include LAB CATEGORY
 # # include LAB CATEGORY
 # router.include_router(
 #     lab_category_router,
