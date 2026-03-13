@@ -5,8 +5,10 @@ from ...api.auth import login
 from app.api.v1.topic_management import topic_routes
 from ...api.v1.ems_module.configurations.department import department
 from ...api.v1.ems_module.comman_functions import comman_function
-router = APIRouter()
+from app.api.v1.material.material_routes import router as material_router
 
+router = APIRouter()
+router.include_router(material_router)
 
 
 from .announcement import router as announcement_router
@@ -471,6 +473,12 @@ router.include_router(
     topic_routes.router,
     prefix="/topic",
     tags=["Topic Management"]
+)
+
+router.include_router(
+     material_router,
+     prefix="/material",
+     tags=["Material"]
 )
 # router.include_router(program.router, prefix="/program", tags=["auth"])
 # router.include_router(program_type.router, prefix="/program_type", tags=["auth"])

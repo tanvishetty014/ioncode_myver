@@ -4,6 +4,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from sqlalchemy.sql import func
 import enum
+from ..core.database import Base
+
 
 Base = declarative_base()
 
@@ -4060,10 +4062,6 @@ class BloomDomain(Base):
     modify_date = Column(DateTime, nullable=True)
 
 
-# ============================================================
-# 1️⃣ LMS Map Instructor Topic
-# Table: lms_map_instructor_topic
-# ============================================================
 class LMSMapInstructorTopic(Base):
     __tablename__ = 'lms_map_instructor_topic'
 
@@ -4074,110 +4072,82 @@ class LMSMapInstructorTopic(Base):
     section_id = Column(Integer, nullable=False)
     topic_id = Column(Integer, nullable=False)
     instructor_id = Column(Integer, nullable=True)
-    status = Column(Integer, nullable=False, default=0)
-
     created_by = Column(Integer, nullable=True)
     modified_by = Column(Integer, nullable=True)
     created_date = Column(DateTime, nullable=True)
     modified_date = Column(DateTime, nullable=True)
 
 
-# ============================================================
-# 2️⃣ LMS Lesson Schedule
-# Table: lms_lesson_schedule
-# ============================================================
-# class LMSLessonSchedule(Base):
-#     __tablename__ = 'lms_lesson_schedule'
-
-#     lls_id = Column(Integer, primary_key=True, autoincrement=True)
-#     conduction_date = Column(Date, nullable=True)
-#     actual_delivery_date = Column(Date, nullable=True)
-
-#     created_by = Column(Integer, nullable=True)
-#     modified_by = Column(Integer, nullable=True)
-#     created_date = Column(DateTime, nullable=True)
-#     modified_date = Column(DateTime, nullable=True)
-
-
-# ============================================================
-# 3️⃣ LMS Lesson Schedule Topic Mapping
-# Table: lms_ls_topic_map
-# ============================================================
-class LMSLsTopicMap(Base):
-    __tablename__ = 'lms_ls_topic_map'
-
-    lls_topic_map_id = Column(Integer, primary_key=True, autoincrement=True)
-    lls_id = Column(Integer, nullable=False)
-    topic_id = Column(Integer, nullable=False)
-
-    created_by = Column(Integer, nullable=True)
-    modified_by = Column(Integer, nullable=True)
-    created_date = Column(DateTime, nullable=True)
-    modified_date = Column(DateTime, nullable=True)
-
-
-# ============================================================
-# 4️⃣ Map Course To Course Instructor
-# Table: map_courseto_course_instructor
-# ============================================================
-
-class MapCourseToCourseInstructor(Base):
-    __tablename__ = "map_courseto_course_instructor"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    academic_batch_id = Column(Integer, nullable=False)
-    semester_id = Column(Integer, nullable=False)
-    course_id = Column(Integer, nullable=False)
-    instructor_id = Column(Integer, nullable=True)
-    section_id = Column(Integer, nullable=True)
-
-    created_by = Column(Integer, nullable=True)
-    modified_by = Column(Integer, nullable=True)
-    created_date = Column(DateTime, nullable=True)
-    modified_date = Column(DateTime, nullable=True)
-
-
-# ============================================================
-# 5️⃣ Topic Lesson Schedule
-# Table: topic_lesson_schedule
-# ============================================================
-
+# Topic Lesson Schedule Model
 class TopicLessonSchedule(Base):
-    __tablename__ = "topic_lesson_schedule"
-    
+    __tablename__ = 'topic_lesson_schedule'
+
     lesson_schedule_id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    academic_batch_id = Column(Integer, nullable=False)
-    semester_id = Column(Integer)
-    course_id = Column(Integer, nullable=False)
     topic_id = Column(Integer, nullable=False)
-    
-    portion_ref = Column(String(8))
-    portion_per_hour = Column(String(2000))
-    
-    conduction_date = Column(Date)
-    actual_delivery_date = Column(Date)
-    
-    created_by = Column(Integer)
-    modified_by = Column(Integer)
-    
-    created_date = Column(DateTime, default=datetime.utcnow)
-    modified_date = Column(DateTime, onupdate=datetime.utcnow)
-# ============================================================
-# 6️⃣ LMS Map Portion LS
-# Table: lms_map_portion_ls
-# ============================================================
+    conduction_date = Column(Date, nullable=True)
+    actual_delivery_date = Column(Date, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# LMS Map Portion LS Model
 class LMSMapPortionLS(Base):
     __tablename__ = 'lms_map_portion_ls'
 
     portion_id = Column(Integer, primary_key=True, autoincrement=True)
     topic_id = Column(Integer, nullable=False)
+    section_id = Column(Integer, nullable=True)
+    lesson_schedule_id = Column(Integer, nullable=True)
+    portion_ref = Column(String(500), nullable=True)
     marks_expt = Column(Float, nullable=True)
+    planned_date = Column(Date, nullable=True)
+    delivery_date = Column(Date, nullable=True)
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
+    status = Column(Integer, nullable=True)
     created_by = Column(Integer, nullable=True)
     modified_by = Column(Integer, nullable=True)
     created_date = Column(DateTime, nullable=True)
     modified_date = Column(DateTime, nullable=True)
-    #Announcement table
+
+class CudosMapCourseToCourseInstructor(Base):
+    __tablename__ = "cudos_map_courseto_course_instructor"
+
+    mcci_id = Column(Integer, primary_key=True)
+    academic_batch_id = Column(Integer)
+    crclm_term_id = Column(Integer)
+    crs_id = Column(Integer)
+    course_instructor_id = Column(Integer)   
+    section_id = Column(Integer)
+
+
+class LMSCourseMaterialUpload(Base):
+    __tablename__ = "lms_crs_material_upload"
+
+    mat_id = Column(Integer, primary_key=True, index=True)
+    document_name = Column(String(1000))
+    file_name = Column(String(1000))
+    docment_url = Column(Text)
+    description = Column(Text)
+    academic_batch_id = Column(Integer)
+    semester_id = Column(Integer)
+    crs_id = Column(Integer)
+    section_ids = Column(String(1000))
+    topic_ids = Column(String(1000))
+    created_by = Column(Integer)
+    update_cnt = Column(Integer,default=0)
+
+class LMSMapShareMaterialsToStudent(Base):
+    __tablename__ = "lms_map_share_materials_to_student"
+
+    material_student_map_id = Column(Integer, primary_key=True, autoincrement=True)
+    ssd_id = Column(Integer)
+    mat_id = Column(Integer)
+    academic_batch_id = Column(Integer)
+    section_id = Column(Integer)
+    student_usn = Column(String(20))
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
