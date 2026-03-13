@@ -9,16 +9,11 @@ from .core.database import engine
 
 app = FastAPI()
 
-# Configuration for CORS - allows your React frontend to communicate with the backend
-origins = [
-    "http://localhost:3000",   # React frontend
-    "http://localhost",
-]
-
+# Configuration for CORS - allows React frontend to communicate with backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,    # REQUIRED for cookies/auth tokens
+    allow_origins=["*"],           # Allow all origins (dev mode)
+    allow_credentials=False,        # Must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -29,7 +24,3 @@ app.include_router(api_router, prefix="/api/v1")
 @app.get("/")
 def read_root():
     return {"message": "Welcome to IonCudos API", "status": "Online"}
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
