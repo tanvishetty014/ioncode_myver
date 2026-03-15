@@ -1,5 +1,3 @@
-
-print("✅ V1 ROUTES LOADED")
 from fastapi import APIRouter
 from ...api.auth import login
 from app.api.v1.topic_management import topic_routes

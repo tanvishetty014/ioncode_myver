@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import date, timedelta, datetime
+from typing import Optional
 from app.db import models  # This points to your models.py file
 from fastapi import HTTPException, status
 
@@ -153,3 +154,27 @@ def sync_timetable_dates_logic(db: Session, sem_time_table_id: int, new_end_date
         return len(new_entries)
 
     return 0
+
+
+def get_timetable_created_dates_for_course(db: Session, crs_code: str):
+    """Return distinct creation dates (date part of `created_on`) for custom timetable entries of a course."""
+    rows = db.query(models.IEMSCustomTimeTable.created_on).filter(
+        models.IEMSCustomTimeTable.crs_code == crs_code
+    ).all()
+
+    # Extract date portion and unique
+    dates = sorted({r[0].date() for r in rows if r[0] is not None})
+    return dates
+
+
+def is_lesson_scheduled_on_date(db: Session, crs_code: str, day: date, section: Optional[str] = None):
+    """Return True/False whether any scheduled class exists for given course on a date; optionally filter by section."""
+    query = db.query(models.IEMSCustomTimeTable).filter(
+        models.IEMSCustomTimeTable.crs_code == crs_code,
+        models.IEMSCustomTimeTable.date == day
+    )
+    if section:
+        query = query.filter(models.IEMSCustomTimeTable.section == section)
+
+    exists = db.query(query.exists()).scalar()
+    return bool(exists)

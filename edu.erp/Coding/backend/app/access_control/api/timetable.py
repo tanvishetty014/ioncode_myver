@@ -92,3 +92,24 @@ def sync_dates(
 ):
     deleted_count = timetable_service.sync_timetable_dates_logic(db, sem_time_table_id, end_date)
     return {"message": f"Sync complete. {deleted_count} classes removed beyond the new date range."}
+
+
+# --- New endpoints requested ---
+@router.get("/created-dates", response_model=List[date])
+def get_created_dates(crs_code: str = Query(..., description="Course code"), db: Session = Depends(get_db)):
+    """Return list of distinct creation dates for timetable entries for a given course."""
+    dates = timetable_service.get_timetable_created_dates_for_course(db, crs_code)
+    return dates
+
+
+@router.get("/has-lesson")
+def has_lesson(crs_code: str = Query(..., description="Course code"),
+               day: date = Query(..., description="Date to check (YYYY-MM-DD)"),
+               section: Optional[str] = Query(None, description="Optional section filter"),
+               db: Session = Depends(get_db)):
+    """Check if any lesson is scheduled for the given course on the specified date.
+
+    Returns `{ 'scheduled': True|False }`.
+    """
+    scheduled = timetable_service.is_lesson_scheduled_on_date(db, crs_code, day, section)
+    return {"scheduled": scheduled}
