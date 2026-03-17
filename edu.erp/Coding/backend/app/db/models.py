@@ -2944,10 +2944,12 @@ class IEMSUserPermissions(Base):
 class IEMSUserRoles(Base):
     __tablename__ = 'iems_user_roles'
 
-    userrole_id = Column(Integer, primary_key=True, nullable=False)
-    user_id = Column(Integer, nullable=False)
-    role_id = Column(Integer, nullable=False)
-    org_id = Column(Integer, default=1, nullable=True)
+    user_role_map_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("iems_users.id"), nullable=False)
+    user_role_id = Column(Integer, ForeignKey("iems_user_role_master.user_role_id"), nullable=False)
+    org_id = Column(Integer, ForeignKey("iems_organisation.org_id"), default=1, nullable=False)
+
+    role = relationship("IEMSUserRoleMaster", foreign_keys=[user_role_id])
 
 
 class IEMSUserRoleMaster(Base):
