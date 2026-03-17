@@ -14,6 +14,7 @@ from .manage_assignment import router as manage_assignment_router
 from .manage_quiz import router as manage_quiz_router
 from app.access_control.api.curriculum import router as curriculum_router
 from app.access_control.api.timetable import router as timetable_router
+from app.access_control.api.attendance import router as attendance_router
 from app.access_control.api.scheduled_classes import router as scheduled_classes_router
 
 
@@ -464,6 +465,7 @@ router.include_router(comman_function.router, prefix="/comman_function", tags=["
 
 router.include_router(curriculum_router)
 router.include_router(timetable_router)
+router.include_router(attendance_router)
 router.include_router(scheduled_classes_router)
 
 # Include routes for configuration module

@@ -111,5 +111,10 @@ def has_lesson(crs_code: str = Query(..., description="Course code"),
 
     Returns `{ 'scheduled': True|False }`.
     """
-    scheduled = timetable_service.is_lesson_scheduled_on_date(db, crs_code, day, section)
-    return {"scheduled": scheduled}
+    # First check existence to avoid unnecessary timing queries when none exist
+    exists = timetable_service.is_lesson_scheduled_on_date(db, crs_code, day, section)
+    if not exists:
+        return {"message": "No classes scheduled"}
+
+    timings = timetable_service.get_scheduled_class_timings(db, crs_code, day, section)
+    return {"scheduled": True, "timings": timings}
