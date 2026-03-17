@@ -59,12 +59,15 @@ def organization_list(db: Session):
 
 # Function to fetch user organization and role
 def get_user_org_role(user_id: int, db: Session):
+    if not user_id:
+        return {"org": [], "role": []}
+
     user_org_list = db.query(IEMSUserOrg.org_id).filter(IEMSUserOrg.user_id == user_id).all()
-    user_role_list = db.query(IEMSUserRoles.role_id).filter(IEMSUserRoles.user_id == user_id).all()
+    user_role_list = db.query(IEMSUserRoles.user_role_id).filter(IEMSUserRoles.user_id == user_id).all()
 
     return {
         "org": [org.org_id for org in user_org_list],
-        "role": [role.role_id for role in user_role_list]
+        "role": [role.user_role_id for role in user_role_list]
     }
 
 
@@ -244,9 +247,12 @@ def get_department_permission(user_id: int, current_user: str, db: Session) -> b
     """
     Checks if the user has department-wise permissions.
     """
+    if not user_id:
+        return False
+
     # Query to check the user's roles
     result = (db.query(IEMSUserRoleMaster.department_wise)
-                .join(IEMSUserRoles, IEMSUserRoles.role_id == IEMSUserRoleMaster.user_role_id)
+                .join(IEMSUserRoles, IEMSUserRoles.user_role_id == IEMSUserRoleMaster.user_role_id)
                 .filter(IEMSUserRoles.user_id == user_id)
                 .first())
     
