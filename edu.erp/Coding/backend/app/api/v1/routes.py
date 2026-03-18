@@ -583,10 +583,6 @@ router.include_router(
 # router.include_router(vehicle_schedule.router, prefix="/transport", tags=['transport'])
 
 
-# Include auth routes with both prefixes for compatibility
-router.include_router(login.router, prefix="/staff_student_login", tags=["Login"])
-router.include_router(login.router, prefix="/auth", tags=["Auth"])
-
 # Include routes for dashboard module
 # router.include_router(
 #     dashboard_info.router, prefix="/dashboard_info_route", tags=["EMS-dashboard"]
@@ -621,9 +617,6 @@ router.include_router(login.router, prefix="/auth", tags=["Auth"])
 # router.include_router(
 #     staff_course_allocation.router, prefix="/user_courses", tags=["EMS-configuration"]
 # )
-router.include_router(
-    department.router, prefix="/department", tags=["EMS-configuration"]
-)
 # router.include_router(program.router, prefix="/program", tags=["EMS-configuration"])
 # router.include_router(
 #     program_type.router, prefix="/program_type", tags=["EMS-configuration"]

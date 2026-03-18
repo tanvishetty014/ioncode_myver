@@ -15,16 +15,17 @@ class ResponseUtils:
         request: Optional[Request] = None,
         origin: Optional[str] = None
     ) -> JSONResponse:
-        """Internal method to add CORS headers"""
         cors_origin = origin or (
-            request.headers.get("origin", "*") if request else "*"
+            request.headers.get("origin") if request else None
         )
-        response.headers.update({
-            "Access-Control-Allow-Origin": cors_origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Methods": "*"
-        })
+
+        if cors_origin:
+            response.headers["Access-Control-Allow-Origin"] = cors_origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Vary"] = "Origin"
+
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*"
         return response
 
     @staticmethod
@@ -38,12 +39,10 @@ class ResponseUtils:
         cors: bool = True,
         cors_origin: Optional[str] = None
     ) -> JSONResponse:
-        """Standard success response format"""
-        serializable_data = jsonable_encoder(data)
         content = {
             "status": True,
             "message": message,
-            "data": serializable_data
+            "data": jsonable_encoder(data)
         }
         response = JSONResponse(
             content=content,
@@ -68,12 +67,12 @@ class ResponseUtils:
         cors: bool = True,
         cors_origin: Optional[str] = None
     ) -> JSONResponse:
-        """Standard error response format"""
         serializable_error_details = jsonable_encoder(error_details or message)
         error_response_data = {
             "message": message,
             "details": serializable_error_details,
         }
+
         if error_code is not None:
             error_response_data["code"] = error_code
         if error_type is not None:
@@ -86,10 +85,11 @@ class ResponseUtils:
             "message": message,
             "error": error_response_data
         }
+
         logger.error(
-            f"API Error: {message} | Status: {status_code}|Details: "
-            f"{serializable_error_details}"
+            f"API Error: {message} | Status: {status_code} | Details: {serializable_error_details}"
         )
+
         response = JSONResponse(
             content=content,
             status_code=status_code,
@@ -113,13 +113,10 @@ class ResponseUtils:
         cors: bool = True,
         cors_origin: Optional[str] = None
     ) -> JSONResponse:
-        """Standard paginated response format"""
-        # Use jsonable_encoder for paginated data as well
-        serializable_data = jsonable_encoder(data)
         content = {
             "status": True,
             "message": message,
-            "data": serializable_data,
+            "data": jsonable_encoder(data),
             "pagination": {
                 "total": total,
                 "page": page,
@@ -138,7 +135,8 @@ class ResponseUtils:
 
     @staticmethod
     def with_cors(
-        response: JSONResponse, request: Request, origin: Optional[str] = None
+        response: JSONResponse,
+        request: Optional[Request] = None,
+        origin: Optional[str] = None
     ) -> JSONResponse:
-        """Explicit CORS header addition for any response"""
         return ResponseUtils._add_cors_headers(response, request, origin)
