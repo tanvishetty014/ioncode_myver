@@ -2440,11 +2440,26 @@ def _topic_schedule_payload(schedule: TopicLessonSchedule, portion: Optional[LMS
 # ---------------- APIs ----------------
 
 def list_course_types(db: Session = Depends(get_db)):
-    course_types = db.query(IEMSCourses.course_type_id).distinct().all()
+    course_type_ids = db.query(IEMSCourses.course_type_id).distinct().all()
+    distinct_ids = [row.course_type_id for row in course_type_ids if row.course_type_id is not None]
+    course_types = (
+        db.query(IEMSCourseType)
+        .filter(IEMSCourseType.course_type_id.in_(distinct_ids))
+        .order_by(IEMSCourseType.course_type_id.asc())
+        .all()
+        if distinct_ids
+        else []
+    )
 
     return {
         "status": True,
-        "data": [ct.course_type_id for ct in course_types]
+        "data": [
+            {
+                "id": row.course_type_id,
+                "name": row.course_type_desc,
+            }
+            for row in course_types
+        ],
     }
 
 
