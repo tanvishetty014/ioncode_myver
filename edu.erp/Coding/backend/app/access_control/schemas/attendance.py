@@ -15,3 +15,17 @@ class AttendanceRecord(BaseModel):
 class AttendanceSavePayload(BaseModel):
     meta: Dict
     records: List[AttendanceRecord]
+
+
+class LessonDatesResponse(BaseModel):
+    dates: List[date]
+
+
+class AttendanceSummaryStudent(BaseModel):
+    name: str
+    present: int
+    absent: int
+
+
+class AttendanceSummaryResponse(BaseModel):
+    students: List[AttendanceSummaryStudent]

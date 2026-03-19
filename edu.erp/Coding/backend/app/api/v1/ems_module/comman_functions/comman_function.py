@@ -31,7 +31,7 @@ from .....utils.auth_helper import get_current_user
 from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool
 
-router = APIRouter()
+router = APIRouter(tags=["Comman Function"])
 
 
 @router.post("/fetch_result_year")
@@ -2439,7 +2439,6 @@ def _topic_schedule_payload(schedule: TopicLessonSchedule, portion: Optional[LMS
 
 # ---------------- APIs ----------------
 
-@router.get("/course-types")
 def list_course_types(db: Session = Depends(get_db)):
     course_types = db.query(IEMSCourses.course_type_id).distinct().all()
 
@@ -2449,7 +2448,6 @@ def list_course_types(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/courses")
 def list_courses(request: CourseRequest, db: Session = Depends(get_db)):
     query = db.query(IEMSCourses).filter(
         IEMSCourses.academic_batch_id == request.academic_batch_id
@@ -2477,7 +2475,6 @@ def list_courses(request: CourseRequest, db: Session = Depends(get_db)):
 
 
 
-@router.post("/batch-sections")
 def list_batch_sections(request: BatchSectionRequest, db: Session = Depends(get_db)):
 
     batch = db.query(IEMSAcademicBatch).filter(
@@ -2496,7 +2493,6 @@ def list_batch_sections(request: BatchSectionRequest, db: Session = Depends(get_
     }
 
 
-@router.post("/schedule-class")
 def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
 
     duplicate = db.query(LMSLessonSchedule).filter(
@@ -2537,7 +2533,6 @@ def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/check-duplicate")
 def check_duplicate(request: DuplicateRequest, db: Session = Depends(get_db)):
 
     duplicates = db.query(LMSLessonSchedule).filter(
@@ -2555,7 +2550,6 @@ def check_duplicate(request: DuplicateRequest, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/scheduled-classes")
 def get_scheduled_classes(
     academic_batch_id: Optional[int] = None,
     semester_id: Optional[int] = None,
@@ -2614,7 +2608,6 @@ def get_scheduled_classes(
     }
 
 
-@router.post("/map-lesson")
 def map_lesson(request: MapLessonRequest, db: Session = Depends(get_db)):
     try:
         section = _resolve_section(db, request.section_id, request.section)
@@ -2695,7 +2688,6 @@ def map_lesson(request: MapLessonRequest, db: Session = Depends(get_db)):
         }
 
 
-@router.post("/add-extra-class")
 def add_extra_class(request: ExtraClassRequest, db: Session = Depends(get_db)):
     try:
         mapping = None
@@ -2775,7 +2767,6 @@ def add_extra_class(request: ExtraClassRequest, db: Session = Depends(get_db)):
         }
 
 
-@router.get("/topics")
 def get_topics(
     course_id: int,
     semester: Optional[int] = None,
@@ -2866,7 +2857,6 @@ def get_topics(
     }
 
 
-@router.get("/students")
 def get_students(
     academic_batch_id: Optional[int] = None,
     semester_id: Optional[int] = None,
@@ -2913,7 +2903,6 @@ def get_students(
     }
 
 
-@router.get("/timetable")
 def get_timetable(
     academic_batch_id: int,
     semester_id: int,
@@ -2959,7 +2948,6 @@ from reportlab.pdfgen import canvas
 import tempfile
 
 
-@router.get("/timetable/export-pdf")
 def export_timetable_pdf(
     academic_batch_id: int,
     semester_id: int,

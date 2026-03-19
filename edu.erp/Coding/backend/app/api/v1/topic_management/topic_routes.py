@@ -28,8 +28,12 @@ from .topic_schema import (
     TopicListRequest,
     UpdateInstructorRequest
 )
+from app.api.v1.ems_module.comman_functions.comman_function import (
+    get_topics as comman_get_topics,
+    map_lesson as comman_map_lesson,
+)
 
-router = APIRouter()
+router = APIRouter(tags=["Topic Management"])
 
 # Helper function to return success response
 def success_response(data, message="Success"):
@@ -51,7 +55,7 @@ def error_response(message, data=None):
 # ✅ DROPDOWN APIs
 # =========================================================
 
-@router.post("/curriculum_list")
+@router.post("/topic/curriculum_list")
 def get_curriculum_list_post(db: Session = Depends(get_db)):
     try:
         data = db.query(IEMSAcademicBatch).all()
@@ -67,7 +71,7 @@ def get_curriculum_list_post(db: Session = Depends(get_db)):
         print(f"ERROR in curriculum_list: {e}")
         return error_response(str(e))
 
-@router.post("/semester_list")
+@router.post("/topic/semester_list")
 def get_semester_list_post(db: Session = Depends(get_db)):
     try:
         data = db.query(IEMSemester).all()
@@ -83,7 +87,7 @@ def get_semester_list_post(db: Session = Depends(get_db)):
         print(f"ERROR in semester_list: {e}")
         return error_response(str(e))
 
-@router.post("/course_list")
+@router.post("/topic/course_list")
 def get_course_list(request: CourseListRequest, db: Session = Depends(get_db)):
     """Get all courses - returns courses for selected curriculum"""
     try:
@@ -115,7 +119,7 @@ def get_course_list(request: CourseListRequest, db: Session = Depends(get_db)):
         return error_response(str(e))
 
 
-@router.post("/section_list_post")
+@router.post("/topic/section_list_post")
 def get_section_list(
     course_id: Optional[int] = Body(None),
     semester_id: Optional[int] = Body(None),
@@ -180,7 +184,7 @@ def get_section_list(
 # ✅ IMPORT & LISTING
 # =========================================================
 
-@router.post("/import_topic")
+@router.post("/topic/import_topic")
 def import_topic(
     academic_batch_id: int = Body(...),
     semester_id: int = Body(...),
@@ -239,7 +243,7 @@ def import_topic(
         print(f"DEBUG: Import error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/topic_list")
+@router.post("/topic/topic_list")
 def topic_list(request: TopicListRequest, db: Session = Depends(get_db)):
     """List ALL topics for this course/semester from cudos_topic, with import status"""
     try:
@@ -339,7 +343,7 @@ def topic_list(request: TopicListRequest, db: Session = Depends(get_db)):
 # -----------------------------
 # UPDATE — Topic
 # -----------------------------
-@router.put("/update_topic/{topic_id}")
+@router.put("/topic/update_topic/{topic_id}")
 def update_topic(topic_id: int, request: TopicCreateRequest, db: Session = Depends(get_db)):
 
     topic = db.query(CudosTopic).filter(
@@ -372,7 +376,7 @@ def update_topic(topic_id: int, request: TopicCreateRequest, db: Session = Depen
 # -----------------------------
 # DELETE — Topic
 # -----------------------------
-@router.delete("/delete_topic/{topic_id}")
+@router.delete("/topic/delete_topic/{topic_id}")
 def delete_topic(topic_id: int, db: Session = Depends(get_db)):
 
     topic = db.query(CudosTopic).filter(
@@ -399,7 +403,7 @@ def delete_topic(topic_id: int, db: Session = Depends(get_db)):
 # -----------------------------
 # GET INSTRUCTOR LIST
 # -----------------------------
-@router.post("/instructor_list")
+@router.post("/topic/instructor_list")
 def instructor_list(db: Session = Depends(get_db)):
     try:
 
@@ -426,7 +430,7 @@ def instructor_list(db: Session = Depends(get_db)):
 # -----------------------------
 # UPDATE INSTRUCTOR
 # -----------------------------
-@router.put("/update_instructor/{mapping_id}")
+@router.put("/topic/update_instructor/{mapping_id}")
 def update_instructor(
     mapping_id: int,
     request: UpdateInstructorRequest,
@@ -455,7 +459,7 @@ def update_instructor(
 # -----------------------------
 # GET CUDOS TOPICS (Not yet imported)
 # -----------------------------
-@router.post("/cudos_topics")
+@router.post("/topic/cudos_topics")
 def get_cudos_topics(
     course_id: int = Body(...),
     semester_id: int = Body(...),
@@ -501,7 +505,7 @@ def get_cudos_topics(
 # -----------------------------
 # IMPORT SELECTED CUDOS TOPICS WITH INSTRUCTOR
 # -----------------------------
-@router.post("/import_cudos_topics")
+@router.post("/topic/import_cudos_topics")
 def import_cudos_topics(
     course_id: int = Body(...),
     semester_id: int = Body(...),
@@ -553,7 +557,7 @@ def import_cudos_topics(
 # -----------------------------
 # GET TOPIC SCHEDULES
 # -----------------------------
-@router.post("/topic_schedules")
+@router.post("/topic/topic_schedules")
 def get_topic_schedules(
     mapping_id: int = Body(...),
     db: Session = Depends(get_db)
@@ -606,7 +610,7 @@ def get_topic_schedules(
 # -----------------------------
 # UPDATE SCHEDULE
 # -----------------------------
-@router.put("/update_schedule/{schedule_id}")
+@router.put("/topic/update_schedule/{schedule_id}")
 def update_schedule(
     schedule_id: int,
     conduction_date: str = Body(None),
@@ -640,7 +644,7 @@ def update_schedule(
 # -----------------------------
 # ADD NEW SCHEDULE
 # -----------------------------
-@router.post("/add_schedule")
+@router.post("/topic/add_schedule")
 def add_schedule(
     mapping_id: int = Body(...),
     session_number: int = Body(...),
@@ -688,7 +692,7 @@ def add_schedule(
 # -----------------------------
 # ADD EXTRA CLASS
 # -----------------------------
-@router.post("/add_extra_class")
+@router.post("/topic/add_extra_class")
 def add_extra_class(
     mapping_id: int = Body(...),
     class_date: str = Body(...),
@@ -734,7 +738,7 @@ def add_extra_class(
 # -----------------------------
 # ADD NEW TOPIC
 # -----------------------------
-@router.post("/add_new_topic")
+@router.post("/topic/add_new_topic")
 def add_new_topic(
     academic_batch_id: int = Body(...),
     semester_id: int = Body(...),
@@ -806,3 +810,7 @@ def add_new_topic(
         db.rollback()
         print(f"DEBUG: Error in add_new_topic: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+router.add_api_route("/comman_function/map-lesson", comman_map_lesson, methods=["POST"])
+router.add_api_route("/comman_function/topics", comman_get_topics, methods=["GET"])

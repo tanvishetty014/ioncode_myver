@@ -7,12 +7,18 @@ from app.access_control.schemas.curriculum_schemas import (
     ScheduledClassOut, ScheduledClassUpdate
 )
 from ...core.database import get_db
+from app.api.v1.ems_module.comman_functions.comman_function import (
+    add_extra_class,
+    check_duplicate,
+    get_scheduled_classes,
+    save_schedule,
+)
 
-router = APIRouter(prefix="/timetable", tags=["Curriculum & Scheduling"])
+router = APIRouter(tags=["Curriculum & Scheduling"])
 
 
 # --- 5. List Scheduled Classes API ---
-@router.get("/scheduled-classes", response_model=List[ScheduledClassOut])
+@router.get("/timetable/scheduled-classes", response_model=List[ScheduledClassOut])
 def list_scheduled_classes(
     section: Optional[str] = None,
     date: Optional[str] = None,
@@ -27,7 +33,7 @@ def list_scheduled_classes(
 
 
 # --- 6. Edit Scheduled Class API ---
-@router.put("/scheduled-classes/{class_id}", response_model=ScheduledClassOut)
+@router.put("/timetable/scheduled-classes/{class_id}", response_model=ScheduledClassOut)
 def edit_scheduled_class(
     class_id: int,
     class_update: ScheduledClassUpdate,
@@ -54,7 +60,7 @@ def edit_scheduled_class(
 
 
 # --- 7. Delete Scheduled Class API ---
-@router.delete("/scheduled-classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/timetable/scheduled-classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scheduled_class(class_id: int, db: Session = Depends(get_db)):
     db_class = db.query(models.IEMSCustomTimeTable).filter(
         models.IEMSCustomTimeTable.id == class_id
@@ -65,3 +71,9 @@ def delete_scheduled_class(class_id: int, db: Session = Depends(get_db)):
     db.delete(db_class)
     db.commit()
     return None
+
+
+router.add_api_route("/comman_function/schedule-class", save_schedule, methods=["POST"])
+router.add_api_route("/comman_function/check-duplicate", check_duplicate, methods=["POST"])
+# router.add_api_route("/comman_function/scheduled-classes", get_scheduled_classes, methods=["GET"])
+router.add_api_route("/comman_function/add-extra-class", add_extra_class, methods=["POST"])

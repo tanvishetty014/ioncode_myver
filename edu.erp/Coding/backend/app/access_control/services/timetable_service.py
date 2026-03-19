@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import date, timedelta, datetime
 from typing import Optional
 from typing import List, Dict
@@ -329,3 +331,137 @@ def save_attendance_batch(db: Session, attendance_list: List[Dict], meta: Dict) 
 
     db.commit()
     return {"created": created, "updated": updated}
+
+
+def get_attendance_lesson_dates(
+    db: Session,
+    academic_batch_id: int,
+    semester_id: int,
+    course_id: int,
+    section_id: int,
+) -> List[date]:
+    """Fetch distinct scheduled lesson dates for attendance calendar highlighting."""
+    query = text(
+        """
+        SELECT DISTINCT ls.plan_date AS lesson_date
+        FROM lms_lesson_schedule ls
+        WHERE ls.academic_batch_id = :academic_batch_id
+            AND ls.semester_id = :semester_id
+            AND ls.section_id = :section_id
+            AND ls.plan_date IS NOT NULL
+        ORDER BY ls.plan_date
+        """
+    )
+
+    try:
+        rows = db.execute(
+            query,
+            {
+                "academic_batch_id": academic_batch_id,
+                "semester_id": semester_id,
+                "course_id": course_id,
+                "section_id": section_id,
+            },
+        ).fetchall()
+        return [row[0] for row in rows if row[0] is not None]
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch lesson dates: {exc}",
+        ) from exc
+
+
+def get_attendance_summary(
+    db: Session,
+    academic_batch_id: Optional[int],
+    semester_id: Optional[int],
+    course_id: Optional[int],
+    section_id: Optional[int],
+    from_date: Optional[date],
+    to_date: Optional[date],
+    only_present: bool = False,
+) -> List[Dict]:
+    """Return student-wise present/absent attendance summary."""
+    print(
+        "Attendance summary params:",
+        {
+            "academic_batch_id": academic_batch_id,
+            "semester_id": semester_id,
+            "course_id": course_id,
+            "section_id": section_id,
+            "from_date": from_date,
+            "to_date": to_date,
+            "only_present": only_present,
+        },
+    )
+
+    conditions = []
+    params: Dict = {}
+
+    if academic_batch_id is not None:
+        conditions.append("ma.academic_batch_id = :academic_batch_id")
+        params["academic_batch_id"] = academic_batch_id
+    if semester_id is not None:
+        conditions.append("ma.semester_id = :semester_id")
+        params["semester_id"] = semester_id
+    if course_id is not None:
+        conditions.append("ma.crs_id = :crs_id")
+        params["crs_id"] = course_id
+    if section_id is not None:
+        conditions.append("ma.section_id = :section_id")
+        params["section_id"] = section_id
+    if from_date is not None and to_date is not None:
+        conditions.append("ma.attendance_date BETWEEN :from_date AND :to_date")
+        params["from_date"] = from_date
+        params["to_date"] = to_date
+    elif from_date is not None:
+        conditions.append("ma.attendance_date >= :from_date")
+        params["from_date"] = from_date
+    elif to_date is not None:
+        conditions.append("ma.attendance_date <= :to_date")
+        params["to_date"] = to_date
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    having_clause = "HAVING COUNT(CASE WHEN msa.attendance_status = 'Present' THEN 1 END) > 0" if only_present else ""
+
+    query = text(
+        f"""
+        SELECT 
+            COALESCE(
+                NULLIF(TRIM(s.name), ''),
+                NULLIF(TRIM(CONCAT_WS(' ', s.first_name, s.middle_name, s.last_name)), ''),
+                s.usno
+            ) AS name,
+            COUNT(CASE WHEN msa.attendance_status = 'Present' THEN 1 END) AS present,
+            COUNT(CASE WHEN msa.attendance_status = 'Absent' THEN 1 END) AS absent
+        FROM lms_manage_attendance ma
+        JOIN lms_map_student_attendance msa 
+            ON ma.attendance_id = msa.attendance_id
+        JOIN iems_students s 
+            ON s.usno = msa.student_usn
+        {where_clause}
+        GROUP BY s.name, s.first_name, s.middle_name, s.last_name, s.usno
+        {having_clause}
+        ORDER BY name
+        """
+    )
+
+    try:
+        rows = db.execute(query, params).fetchall()
+        print("Attendance summary raw rows:", rows)
+
+        students = [
+            {
+                "name": row.name,
+                "present": int(row.present or 0),
+                "absent": int(row.absent or 0),
+            }
+            for row in rows
+        ]
+        print("Attendance summary mapped students:", students)
+        return students
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch attendance summary: {exc}",
+        ) from exc

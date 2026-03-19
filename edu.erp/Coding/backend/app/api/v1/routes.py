@@ -450,18 +450,15 @@ router.include_router(
 
 
 # Include auth routes
-router.include_router(login.router, prefix="/auth", tags=["auth"])
+router.include_router(login.router)
 # router.include_router(register.router, prefix="/auth", tags=["auth"])
 #router.include_router(refresh_token.router, prefix="/auth", tags=["auth"])
-
-# Include routes for registartion module
-router.include_router(login.router, prefix="/staff_student_login", tags=["auth"])
 
 # Include routes for dashboard module
 # router.include_router(dashboard_info.router, prefix="/dashboard_info_route", tags=["auth"])
 
 # Include routes for comman function  module
-router.include_router(comman_function.router, prefix="/comman_function", tags=["auth"])
+router.include_router(comman_function.router, prefix="/comman_function")
 
 router.include_router(curriculum_router)
 router.include_router(timetable_router)
@@ -476,9 +473,7 @@ router.include_router(scheduled_classes_router)
 # router.include_router(staff_course_allocation.router, prefix="/user_courses", tags=["auth"])
 router.include_router(department.router, prefix="/department", tags=["auth"])
 router.include_router(
-    topic_routes.router,
-    prefix="/topic",
-    tags=["Topic Management"]
+    topic_routes.router
 )
 
 router.include_router(
