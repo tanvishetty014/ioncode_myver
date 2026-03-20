@@ -1,13 +1,17 @@
+
+print("✅ V1 ROUTES LOADED")
 from fastapi import APIRouter
 from ...api.auth import login
 from app.api.v1.topic_management import topic_routes
 from ...api.v1.ems_module.configurations.department import department
 from ...api.v1.ems_module.comman_functions import comman_function
 from app.api.v1.material.material_routes import router as material_router
+from app.api.v1.student_assignment.student_assignment_routes import router as student_assignment_router
 
 router = APIRouter()
+router.include_router(student_assignment_router)
 router.include_router(material_router)
-
+router = APIRouter(tags=["Student Assignment"])
 
 from .announcement import router as announcement_router
 from .manage_assignment import router as manage_assignment_router
@@ -484,6 +488,11 @@ router.include_router(
      prefix="/material",
      tags=["Material"]
 )
+router.include_router(
+    student_assignment_router,
+    prefix="/student_assignment"
+)
+
 # router.include_router(program.router, prefix="/program", tags=["auth"])
 # router.include_router(program_type.router, prefix="/program_type", tags=["auth"])
 
