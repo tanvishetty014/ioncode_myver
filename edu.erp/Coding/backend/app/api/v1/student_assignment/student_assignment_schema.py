@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-
+#classes
 class AssignmentListRequest(BaseModel):
     course_id: int
     semester_id: int
