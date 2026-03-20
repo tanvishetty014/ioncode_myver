@@ -26,6 +26,7 @@ from app.access_control.api.permissions import router as permissions
 from app.access_control.api.curriculum import router as curriculum
 from app.access_control.api.timetable import router as timetable
 from app.access_control.api.scheduled_classes import router as scheduled_classes
+from app.access_control.api.attendance import router as attendance
 
 # from app.access_control.middleware.auth_middleware import authorize
 
@@ -53,3 +54,4 @@ router.include_router(permissions)
 router.include_router(curriculum)
 router.include_router(timetable)
 router.include_router(scheduled_classes)
+router.include_router(attendance)

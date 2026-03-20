@@ -10,12 +10,16 @@ from app.access_control.schemas.curriculum_schemas import (
 from ...core.database import get_db
 # Import the service logic
 from ..services import timetable_service 
+from app.api.v1.ems_module.comman_functions.comman_function import (
+    export_timetable_pdf,
+    get_timetable,
+)
 
-router = APIRouter(prefix="/timetable", tags=["Curriculum & Scheduling"])
+router = APIRouter(tags=["Curriculum & Scheduling"])
 
 # --- EXISTING CODE ---
 
-@router.get("/timetables", response_model=List[TimeTableOut])
+@router.get("/timetable/timetables", response_model=List[TimeTableOut])
 def get_timetables(term: str, section: str, db: Session = Depends(get_db)):
     results = db.query(
         models.IEMSTimeTable.time_table_id,
@@ -47,7 +51,7 @@ def get_timetables(term: str, section: str, db: Session = Depends(get_db)):
 # --- NEW TASKS AMENDED ---
 
 # 1. DELETE TIMETABLE
-@router.delete("/{sem_time_table_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/timetable/{sem_time_table_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_timetable(sem_time_table_id: int, db: Session = Depends(get_db)):
     success = timetable_service.delete_timetable_logic(db, sem_time_table_id)
     if not success:
@@ -55,7 +59,7 @@ def delete_timetable(sem_time_table_id: int, db: Session = Depends(get_db)):
     return None
 
 # 2. RESET TIMETABLE DATES
-@router.patch("/{sem_time_table_id}/reset-dates")
+@router.patch("/timetable/{sem_time_table_id}/reset-dates")
 def reset_timetable(sem_time_table_id: int, db: Session = Depends(get_db)):
     success = timetable_service.reset_timetable_dates_logic(db, sem_time_table_id)
     if not success:
@@ -63,7 +67,7 @@ def reset_timetable(sem_time_table_id: int, db: Session = Depends(get_db)):
     return {"message": "Timetable dates reset successfully"}
 
 # 3. COPY CLASS DAY (UPDATED WITH FRIEND'S FIXES)
-@router.post("/copy-day")
+@router.post("/timetable/copy-day")
 def copy_day(
     source_date: date = Query(...), 
     target_date: date = Query(...), 
@@ -84,7 +88,7 @@ def copy_day(
     return {"message": f"Successfully copied {count} classes to {target_date}"}
 
 # 4. SYNC DATES
-@router.patch("/{sem_time_table_id}/sync-range")
+@router.patch("/timetable/{sem_time_table_id}/sync-range")
 def sync_dates(
     sem_time_table_id: int, 
     end_date: date = Query(...), # Added Query here as well for consistency
@@ -95,14 +99,14 @@ def sync_dates(
 
 
 # --- New endpoints requested ---
-@router.get("/created-dates", response_model=List[date])
+@router.get("/timetable/created-dates", response_model=List[date])
 def get_created_dates(crs_code: str = Query(..., description="Course code"), db: Session = Depends(get_db)):
     """Return list of distinct creation dates for timetable entries for a given course."""
     dates = timetable_service.get_timetable_created_dates_for_course(db, crs_code)
     return dates
 
 
-@router.get("/has-lesson")
+@router.get("/timetable/has-lesson")
 def has_lesson(crs_code: str = Query(..., description="Course code"),
                day: date = Query(..., description="Date to check (YYYY-MM-DD)"),
                section: Optional[str] = Query(None, description="Optional section filter"),
@@ -111,5 +115,14 @@ def has_lesson(crs_code: str = Query(..., description="Course code"),
 
     Returns `{ 'scheduled': True|False }`.
     """
-    scheduled = timetable_service.is_lesson_scheduled_on_date(db, crs_code, day, section)
-    return {"scheduled": scheduled}
+    # First check existence to avoid unnecessary timing queries when none exist
+    exists = timetable_service.is_lesson_scheduled_on_date(db, crs_code, day, section)
+    if not exists:
+        return {"message": "No classes scheduled"}
+
+    timings = timetable_service.get_scheduled_class_timings(db, crs_code, day, section)
+    return {"scheduled": True, "timings": timings}
+
+
+# router.add_api_route("/comman_function/timetable", get_timetable, methods=["GET"])
+# router.add_api_route("/comman_function/timetable/export-pdf", export_timetable_pdf, methods=["GET"])

@@ -84,8 +84,8 @@ def check_common_validation(
         is_org_id = False
         is_status_check = True
     elif flag == 'user_role':
-        column_name = 'userrole_id'
-        condition_name = 'role_id'
+        column_name = 'user_role_map_id'
+        condition_name = 'user_role_id'
         model_class = IEMSUserRoles
     elif flag == 'user_role_name':
         column_name = 'user_role_id'
@@ -113,11 +113,11 @@ def check_common_validation(
     if is_status_check and hasattr(model_class, 'status'):
         query = query.where(getattr(model_class, 'status') == 1)
 
-    result = db.execute(query).scalars().all()
-    
+    result = db.execute(query).scalars().first()
+
     # Check if any records exist
     if result:
-        if getattr(result[0], column_name) == id:
+        if getattr(result, column_name, None) == id:
             return 1  # Duplicate found but same ID
         return 0  # Duplicate found with different ID
 

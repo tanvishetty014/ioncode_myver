@@ -18,6 +18,7 @@ from .manage_assignment import router as manage_assignment_router
 from .manage_quiz import router as manage_quiz_router
 from app.access_control.api.curriculum import router as curriculum_router
 from app.access_control.api.timetable import router as timetable_router
+from app.access_control.api.attendance import router as attendance_router
 from app.access_control.api.scheduled_classes import router as scheduled_classes_router
 
 
@@ -453,21 +454,19 @@ router.include_router(
 
 
 # Include auth routes
-router.include_router(login.router, prefix="/auth", tags=["auth"])
+router.include_router(login.router)
 # router.include_router(register.router, prefix="/auth", tags=["auth"])
 #router.include_router(refresh_token.router, prefix="/auth", tags=["auth"])
-
-# Include routes for registartion module
-router.include_router(login.router, prefix="/staff_student_login", tags=["auth"])
 
 # Include routes for dashboard module
 # router.include_router(dashboard_info.router, prefix="/dashboard_info_route", tags=["auth"])
 
 # Include routes for comman function  module
-router.include_router(comman_function.router, prefix="/comman_function", tags=["auth"])
+router.include_router(comman_function.router, prefix="/comman_function")
 
 router.include_router(curriculum_router)
 router.include_router(timetable_router)
+router.include_router(attendance_router)
 router.include_router(scheduled_classes_router)
 
 # Include routes for configuration module
@@ -478,9 +477,7 @@ router.include_router(scheduled_classes_router)
 # router.include_router(staff_course_allocation.router, prefix="/user_courses", tags=["auth"])
 router.include_router(department.router, prefix="/department", tags=["auth"])
 router.include_router(
-    topic_routes.router,
-    prefix="/topic",
-    tags=["Topic Management"]
+    topic_routes.router
 )
 
 router.include_router(
@@ -590,10 +587,6 @@ router.include_router(
 # router.include_router(vehicle_schedule.router, prefix="/transport", tags=['transport'])
 
 
-# Include auth routes with both prefixes for compatibility
-router.include_router(login.router, prefix="/staff_student_login", tags=["Login"])
-router.include_router(login.router, prefix="/auth", tags=["Auth"])
-
 # Include routes for dashboard module
 # router.include_router(
 #     dashboard_info.router, prefix="/dashboard_info_route", tags=["EMS-dashboard"]
@@ -628,9 +621,6 @@ router.include_router(login.router, prefix="/auth", tags=["Auth"])
 # router.include_router(
 #     staff_course_allocation.router, prefix="/user_courses", tags=["EMS-configuration"]
 # )
-router.include_router(
-    department.router, prefix="/department", tags=["EMS-configuration"]
-)
 # router.include_router(program.router, prefix="/program", tags=["EMS-configuration"])
 # router.include_router(
 #     program_type.router, prefix="/program_type", tags=["EMS-configuration"]

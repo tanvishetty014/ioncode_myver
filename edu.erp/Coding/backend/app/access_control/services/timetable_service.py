@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import date, timedelta, datetime
 from typing import Optional
+from typing import List, Dict
 from app.db import models  # This points to your models.py file
 from fastapi import HTTPException, status
 
@@ -178,3 +181,287 @@ def is_lesson_scheduled_on_date(db: Session, crs_code: str, day: date, section: 
 
     exists = db.query(query.exists()).scalar()
     return bool(exists)
+
+
+def get_scheduled_class_timings(db: Session, crs_code: str, day: date, section: Optional[str] = None):
+    """Return list of scheduled class timings for a course on a date (optionally filtered by section)."""
+    query = db.query(
+        models.IEMSCustomTimeTable.start_time,
+        models.IEMSCustomTimeTable.end_time,
+        models.IEMSCustomTimeTable.section,
+        models.IEMSCustomTimeTable.faculty_id,
+        models.IEMSCustomTimeTable.batch_name
+    ).filter(
+        models.IEMSCustomTimeTable.crs_code == crs_code,
+        models.IEMSCustomTimeTable.date == day
+    )
+    if section:
+        query = query.filter(models.IEMSCustomTimeTable.section == section)
+
+    rows = query.order_by(models.IEMSCustomTimeTable.start_time).all()
+
+    timings = [
+        {
+            "start_time": r[0],
+            "end_time": r[1],
+            "section": r[2],
+            "faculty_id": r[3],
+            "batch_name": r[4]
+        }
+        for r in rows
+    ]
+    return timings
+
+
+def get_attendance_for_timing(db: Session, crs_code: str, day: date, start_time: str, end_time: str, section: Optional[str] = None, sem_time_table_id: Optional[int] = None) -> List[Dict]:
+    """Fetch attendance rows for a specific class timing."""
+    query = db.query(
+        models.IEMSDailyAttendance.attendance_id,
+        models.IEMSDailyAttendance.regno,
+        models.IEMSDailyAttendance.usno,
+        models.IEMSDailyAttendance.student_id,
+        models.IEMSDailyAttendance.attendance_status,
+        models.IEMSDailyAttendance.other_reason,
+        models.IEMSDailyAttendance.posted_date,
+        models.IEMSDailyAttendance.is_extra_class
+    ).filter(
+        models.IEMSDailyAttendance.crs_code == crs_code,
+        models.IEMSDailyAttendance.result_year == day,
+        models.IEMSDailyAttendance.start_time == start_time,
+        models.IEMSDailyAttendance.end_time == end_time
+    )
+
+    if section:
+        query = query.filter(models.IEMSDailyAttendance.section == section)
+    if sem_time_table_id:
+        query = query.filter(models.IEMSDailyAttendance.sem_time_table_id == sem_time_table_id)
+
+    rows = query.all()
+    return [
+        {
+            "attendance_id": r[0],
+            "regno": r[1],
+            "usno": r[2],
+            "student_id": r[3],
+            "attendance_status": r[4],
+            "other_reason": r[5],
+            "posted_date": r[6],
+            "is_extra_class": r[7]
+        }
+        for r in rows
+    ]
+
+
+def save_attendance_batch(db: Session, attendance_list: List[Dict], meta: Dict) -> Dict:
+    """Save or update attendance entries.
+
+    attendance_list: list of dicts with keys: regno, usno(optional), student_id(optional), attendance_status, other_reason(optional), is_extra_class(optional)
+    meta: dict with class context: crs_code, result_year (date), start_time, end_time, section, sem_time_table_id, user_id
+    Returns counts of created/updated rows.
+    """
+    created = 0
+    updated = 0
+    now = datetime.utcnow()
+
+    crs_code = meta.get("crs_code")
+    result_year = meta.get("result_year")
+    start_time = meta.get("start_time")
+    end_time = meta.get("end_time")
+    section = meta.get("section")
+    sem_time_table_id = meta.get("sem_time_table_id")
+    user_id = meta.get("user_id")
+
+    for item in attendance_list:
+        regno = item.get("regno")
+        student_id = item.get("student_id")
+        usno = item.get("usno")
+        status_val = item.get("attendance_status")
+        other = item.get("other_reason")
+        is_extra = item.get("is_extra_class", 0)
+
+        if not regno:
+            continue
+
+        # Find existing record
+        existing = db.query(models.IEMSDailyAttendance).filter(
+            models.IEMSDailyAttendance.crs_code == crs_code,
+            models.IEMSDailyAttendance.result_year == result_year,
+            models.IEMSDailyAttendance.start_time == start_time,
+            models.IEMSDailyAttendance.end_time == end_time,
+            models.IEMSDailyAttendance.regno == regno
+        )
+        if section:
+            existing = existing.filter(models.IEMSDailyAttendance.section == section)
+        if sem_time_table_id:
+            existing = existing.filter(models.IEMSDailyAttendance.sem_time_table_id == sem_time_table_id)
+
+        existing_row = existing.first()
+        if existing_row:
+            # Update
+            existing_row.attendance_status = status_val
+            existing_row.other_reason = other
+            existing_row.user_id = user_id
+            existing_row.posted_date = now
+            existing_row.updated_date = now
+            existing_row.is_extra_class = is_extra
+            db.add(existing_row)
+            updated += 1
+        else:
+            # Insert
+            new_row = models.IEMSDailyAttendance(
+                result_year=result_year,
+                crs_code=crs_code,
+                student_id=student_id,
+                regno=regno,
+                usno=usno,
+                section=section,
+                start_time=start_time,
+                end_time=end_time,
+                attendance_status=status_val,
+                other_reason=other,
+                user_id=user_id,
+                sem_time_table_id=sem_time_table_id,
+                posted_date=now,
+                created_date=now,
+                updated_date=now,
+                is_extra_class=is_extra
+            )
+            db.add(new_row)
+            created += 1
+
+    db.commit()
+    return {"created": created, "updated": updated}
+
+
+def get_attendance_lesson_dates(
+    db: Session,
+    academic_batch_id: int,
+    semester_id: int,
+    course_id: int,
+    section_id: int,
+) -> List[date]:
+    """Fetch distinct scheduled lesson dates for attendance calendar highlighting."""
+    query = text(
+        """
+        SELECT DISTINCT ls.plan_date AS lesson_date
+        FROM lms_lesson_schedule ls
+        WHERE ls.academic_batch_id = :academic_batch_id
+            AND ls.semester_id = :semester_id
+            AND ls.section_id = :section_id
+            AND ls.plan_date IS NOT NULL
+        ORDER BY ls.plan_date
+        """
+    )
+
+    try:
+        rows = db.execute(
+            query,
+            {
+                "academic_batch_id": academic_batch_id,
+                "semester_id": semester_id,
+                "course_id": course_id,
+                "section_id": section_id,
+            },
+        ).fetchall()
+        return [row[0] for row in rows if row[0] is not None]
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch lesson dates: {exc}",
+        ) from exc
+
+
+def get_attendance_summary(
+    db: Session,
+    academic_batch_id: Optional[int],
+    semester_id: Optional[int],
+    course_id: Optional[int],
+    section_id: Optional[int],
+    from_date: Optional[date],
+    to_date: Optional[date],
+    only_present: bool = False,
+) -> List[Dict]:
+    """Return student-wise present/absent attendance summary."""
+    print(
+        "Attendance summary params:",
+        {
+            "academic_batch_id": academic_batch_id,
+            "semester_id": semester_id,
+            "course_id": course_id,
+            "section_id": section_id,
+            "from_date": from_date,
+            "to_date": to_date,
+            "only_present": only_present,
+        },
+    )
+
+    conditions = []
+    params: Dict = {}
+
+    if academic_batch_id is not None:
+        conditions.append("ma.academic_batch_id = :academic_batch_id")
+        params["academic_batch_id"] = academic_batch_id
+    if semester_id is not None:
+        conditions.append("ma.semester_id = :semester_id")
+        params["semester_id"] = semester_id
+    if course_id is not None:
+        conditions.append("ma.crs_id = :crs_id")
+        params["crs_id"] = course_id
+    if section_id is not None:
+        conditions.append("ma.section_id = :section_id")
+        params["section_id"] = section_id
+    if from_date is not None and to_date is not None:
+        conditions.append("ma.attendance_date BETWEEN :from_date AND :to_date")
+        params["from_date"] = from_date
+        params["to_date"] = to_date
+    elif from_date is not None:
+        conditions.append("ma.attendance_date >= :from_date")
+        params["from_date"] = from_date
+    elif to_date is not None:
+        conditions.append("ma.attendance_date <= :to_date")
+        params["to_date"] = to_date
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    having_clause = "HAVING COUNT(CASE WHEN msa.attendance_status = 'Present' THEN 1 END) > 0" if only_present else ""
+
+    query = text(
+        f"""
+        SELECT 
+            COALESCE(
+                NULLIF(TRIM(s.name), ''),
+                NULLIF(TRIM(CONCAT_WS(' ', s.first_name, s.middle_name, s.last_name)), ''),
+                s.usno
+            ) AS name,
+            COUNT(CASE WHEN msa.attendance_status = 'Present' THEN 1 END) AS present,
+            COUNT(CASE WHEN msa.attendance_status = 'Absent' THEN 1 END) AS absent
+        FROM lms_manage_attendance ma
+        JOIN lms_map_student_attendance msa 
+            ON ma.attendance_id = msa.attendance_id
+        JOIN iems_students s 
+            ON s.usno = msa.student_usn
+        {where_clause}
+        GROUP BY s.name, s.first_name, s.middle_name, s.last_name, s.usno
+        {having_clause}
+        ORDER BY name
+        """
+    )
+
+    try:
+        rows = db.execute(query, params).fetchall()
+        print("Attendance summary raw rows:", rows)
+
+        students = [
+            {
+                "name": row.name,
+                "present": int(row.present or 0),
+                "absent": int(row.absent or 0),
+            }
+            for row in rows
+        ]
+        print("Attendance summary mapped students:", students)
+        return students
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch attendance summary: {exc}",
+        ) from exc
