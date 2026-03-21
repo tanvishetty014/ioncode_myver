@@ -12,7 +12,7 @@ from ...db.models import (
     StudentNotificationMap,
     IEMSDepartment,
     IEMProgram,
-    IEMSCurriculum,
+    IEMSAcademicBatch,
 )
 
 router = APIRouter(prefix="/announcements", tags=["Announcements"])
@@ -170,24 +170,29 @@ def get_send_programs(dept_id: Optional[int] = Query(default=None), db: Session 
     return returnSuccess(data)
 
 
-# Fetches curriculum options with optional department and program filtering.
+# Fetches academic batch (curriculum) options with optional department and program filtering.
 @router.get("/send/curriculums")
 def get_send_curriculums(
     dept_id: Optional[int] = Query(default=None),
     pgm_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(IEMSCurriculum.crclm_id, IEMSCurriculum.start_year, IEMSCurriculum.dept_id, IEMSCurriculum.pgm_id)
+    query = db.query(
+        IEMSAcademicBatch.academic_batch_id,
+        IEMSAcademicBatch.academic_batch_desc,
+        IEMSAcademicBatch.dept_id,
+        IEMSAcademicBatch.pgm_id,
+    ).filter(IEMSAcademicBatch.status == 1)
     if dept_id is not None:
-        query = query.filter(IEMSCurriculum.dept_id == dept_id)
+        query = query.filter(IEMSAcademicBatch.dept_id == dept_id)
     if pgm_id is not None:
-        query = query.filter(IEMSCurriculum.pgm_id == pgm_id)
+        query = query.filter(IEMSAcademicBatch.pgm_id == pgm_id)
 
-    rows = query.order_by(IEMSCurriculum.crclm_id.desc()).all()
+    rows = query.order_by(IEMSAcademicBatch.academic_batch_id.desc()).all()
     data = [
         {
-            "crclm_id": row.crclm_id,
-            "start_year": row.start_year,
+            "crclm_id": row.academic_batch_id,
+            "start_year": row.academic_batch_desc,
             "dept_id": row.dept_id,
             "pgm_id": row.pgm_id,
         }
