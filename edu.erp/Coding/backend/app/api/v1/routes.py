@@ -16,6 +16,8 @@ router = APIRouter(tags=["Student Assignment"])
 from .announcement import router as announcement_router
 from .manage_assignment import router as manage_assignment_router
 from .manage_quiz import router as manage_quiz_router
+from .student_record_report import router as student_record_report_router
+from .attendance_status_report import router as attendance_status_report_router
 from app.access_control.api.curriculum import router as curriculum_router
 from app.access_control.api.timetable import router as timetable_router
 from app.access_control.api.attendance import router as attendance_router
@@ -430,6 +432,16 @@ router.include_router(
     manage_quiz_router,
     prefix="/manage-quiz",
     tags=["Manage Quiz"]
+)
+router.include_router(
+    student_record_report_router,
+    prefix="/reports",
+    tags=["Reports - Student Record"]
+)
+router.include_router(
+    attendance_status_report_router,
+    prefix="/reports",
+    tags=["Attendance Status Report"]
 )
 # router.include_router(
 #     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
