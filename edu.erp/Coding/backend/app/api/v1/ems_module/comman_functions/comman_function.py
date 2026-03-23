@@ -1,9 +1,12 @@
+from app.db.models import IEMSCrclmTerm
 from typing import Dict, Optional
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, asc, distinct, func, text, update
 from sqlalchemy.orm import Session
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 
 from app.utils.set_password_helper import set_private_password, validate_old_password
 from .comman_function_utils import attendance_processing, cia_evaluate_processing, cia_processing, cia_see_processing, \
@@ -22,7 +25,7 @@ from .comman_function_schema import AcademicBatchRequest, BatchCycleFilter, Bloo
 from .....db.models import BloomDomain, Caste, City, Country, IEMExamEvent, IEMExamHallMaster, IEMExamSession, IEMGrade, \
     IEMLabCourseBatch, IEMOrgConfigs, IEMOrganisation, IEMParentsOccupationMaster, IEMSAcademicBatch, IEMSBatchCycle, \
     IEMSCIAExamMaster, IEMSCIAStudentCourses, IEMSCIOccasionType, IEMSClassTimings, IEMSCourseType, IEMSCourses, \
-    IEMSCrsFaculty, IEMSEventCalenderDetails, IEMSEventStatus, IEMSDepartment, IEMProgramType, IEMProgram, \
+    IEMSCrclmTerm, IEMSCrsFaculty, IEMSEventCalenderDetails, IEMSEventStatus, IEMSDepartment, IEMProgramType, IEMProgram, \
     IEMSEventTypeMaster, IEMSProgressionRules, IEMSTemplate, IEMSTtDaysSet, IEMSUserCourseMgmt, IEMSUserRoleMaster, \
     IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, LMSLessonSchedule, \
     State, StudentCourse, CudosTopic, LMSMapInstructorTopic, TopicLessonSchedule, LMSMapPortionLS, IEMFacultyExtraClasses
@@ -32,6 +35,28 @@ from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool
 
 router = APIRouter(tags=["Comman Function"])
+
+
+def _api_success(data=None, message: str = "Data fetched successfully", status_code: int = status.HTTP_200_OK):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status_code,
+            "message": message,
+            "data": jsonable_encoder(data),
+        },
+    )
+
+
+def _api_error(message: str = "Invalid input", error: str = "Error details", status_code: int = status.HTTP_400_BAD_REQUEST):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status_code,
+            "message": message,
+            "error": error,
+        },
+    )
 
 
 @router.post("/fetch_result_year")
@@ -2385,6 +2410,8 @@ class MapLessonRequest(BaseModel):
     section: Optional[str] = None
     academic_batch_id: Optional[int] = None
     semester_id: Optional[int] = None
+    schedule_id: Optional[int] = None
+    class_date: Optional[date] = None
     created_by: int = 1
     instructor_id: Optional[int] = None
     topic_ids: Optional[list[int]] = None
@@ -2393,6 +2420,10 @@ class MapLessonRequest(BaseModel):
 class ExtraClassRequest(BaseModel):
     mapping_id: Optional[int] = None
     topic_id: Optional[int] = None
+    course_id: Optional[int] = None
+    section_id: Optional[int] = None
+    academic_batch_id: Optional[int] = None
+    semester_id: Optional[int] = None
     class_date: date
     start_time: Optional[str] = None
     end_time: Optional[str] = None
@@ -2436,6 +2467,99 @@ def _topic_schedule_payload(schedule: TopicLessonSchedule, portion: Optional[LMS
             "status": portion.status,
         })
     return payload
+
+
+def _parse_schedule_time(value):
+    if value is None:
+        return None
+
+    if isinstance(value, timedelta):
+        return int(value.total_seconds())
+
+    if isinstance(value, time):
+        return (value.hour * 3600) + (value.minute * 60) + value.second
+
+    if isinstance(value, str):
+        normalized = value.strip()
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed = datetime.strptime(normalized, fmt).time()
+                return (parsed.hour * 3600) + (parsed.minute * 60) + parsed.second
+            except ValueError:
+                continue
+        raise ValueError(f"Unsupported time format: {value}")
+
+    return value
+
+
+def _resolve_semester_id(db: Session, academic_batch_id: int, crclm_term_id: int) -> int:
+    term = db.query(IEMSCrclmTerm).filter(
+        IEMSCrclmTerm.crclm_term_id == crclm_term_id,
+        IEMSCrclmTerm.crclm_id == academic_batch_id,
+    ).first()
+
+    if not term:
+        raise ValueError("Invalid crclm_term_id for the provided academic_batch_id")
+
+    semester = db.query(IEMSemester).filter(
+        IEMSemester.academic_batch_id == academic_batch_id,
+        IEMSemester.semester == term.term_name,
+        IEMSemester.status == 1,
+    ).order_by(IEMSemester.semester_id.asc()).first()
+
+    if not semester:
+        raise ValueError("No valid semester_id found for the provided crclm_term_id")
+
+    return semester.semester_id
+
+
+def _find_schedule_conflicts(db: Session, request: DuplicateRequest):
+    requested_start = _parse_schedule_time(request.start_time)
+    requested_end = _parse_schedule_time(request.end_time)
+
+    if requested_start >= requested_end:
+        raise ValueError("start_time must be earlier than end_time")
+
+    resolved_semester_id = _resolve_semester_id(
+        db,
+        academic_batch_id=request.academic_batch_id,
+        crclm_term_id=request.semester_id,
+    )
+
+    schedules = db.query(
+        LMSLessonSchedule.lls_id,
+        LMSLessonSchedule.academic_batch_id,
+        LMSLessonSchedule.semester_id,
+        LMSLessonSchedule.section_id,
+        LMSLessonSchedule.plan_date,
+        LMSLessonSchedule.start_time,
+        LMSLessonSchedule.end_time,
+    ).filter(
+        LMSLessonSchedule.academic_batch_id == request.academic_batch_id,
+        LMSLessonSchedule.semester_id == resolved_semester_id,
+        LMSLessonSchedule.section_id == request.section_id,
+        LMSLessonSchedule.plan_date == request.plan_date,
+    ).all()
+
+    conflicts = []
+    for row in schedules:
+        if not row.start_time or not row.end_time:
+            continue
+        existing_start = _parse_schedule_time(row.start_time)
+        existing_end = _parse_schedule_time(row.end_time)
+        if existing_start < requested_end and requested_start < existing_end:
+            conflicts.append({
+                "lls_id": row.lls_id,
+                "academic_batch_id": row.academic_batch_id,
+                "semester_id": row.semester_id,
+                "crclm_term_id": request.semester_id,
+                "section_id": row.section_id,
+                "plan_date": row.plan_date,
+                "start_time": row.start_time,
+                "end_time": row.end_time,
+            })
+
+    return conflicts
 
 # ---------------- APIs ----------------
 
@@ -2509,25 +2633,33 @@ def list_batch_sections(request: BatchSectionRequest, db: Session = Depends(get_
 
 
 def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
+    try:
+        resolved_semester_id = _resolve_semester_id(
+            db,
+            academic_batch_id=request.academic_batch_id,
+            crclm_term_id=request.semester_id,
+        )
+        duplicate_request = DuplicateRequest(
+            academic_batch_id=request.academic_batch_id,
+            semester_id=request.semester_id,
+            section_id=request.section_id,
+            plan_date=request.plan_date,
+            start_time=request.start_time,
+            end_time=request.end_time,
+        )
+        conflicts = _find_schedule_conflicts(db, duplicate_request)
+    except ValueError as exc:
+        return _api_error(message="Invalid input", error=str(exc))
 
-    duplicate = db.query(LMSLessonSchedule).filter(
-        LMSLessonSchedule.academic_batch_id == request.academic_batch_id,
-        LMSLessonSchedule.semester_id == request.semester_id,
-        LMSLessonSchedule.section_id == request.section_id,
-        LMSLessonSchedule.plan_date == request.plan_date,
-        LMSLessonSchedule.start_time == request.start_time,
-        LMSLessonSchedule.end_time == request.end_time
-    ).first()
-
-    if duplicate:
-        return {
-            "status": False,
-            "message": "Duplicate class already scheduled for same timing"
-        }
+    if conflicts:
+        return _api_error(
+            message="Class already scheduled for this time",
+            error="Class already scheduled for this time"
+        )
 
     new_schedule = LMSLessonSchedule(
         academic_batch_id=request.academic_batch_id,
-        semester_id=request.semester_id,
+        semester_id=resolved_semester_id,
         crs_id=request.crs_id,
         section_id=request.section_id,
         plan_date=request.plan_date,
@@ -2541,28 +2673,29 @@ def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_schedule)
 
-    return {
-        "status": True,
-        "message": "Class Scheduled Successfully",
-        "data": new_schedule.__dict__
-    }
+    return _api_success(
+        data=_clean_model_dict(new_schedule),
+        message="Class scheduled successfully",
+        status_code=status.HTTP_201_CREATED
+    )
 
 
 def check_duplicate(request: DuplicateRequest, db: Session = Depends(get_db)):
+    try:
+        duplicates = _find_schedule_conflicts(db, request)
+    except ValueError as exc:
+        return _api_error(message="Invalid input", error=str(exc))
 
-    duplicates = db.query(LMSLessonSchedule).filter(
-        LMSLessonSchedule.academic_batch_id == request.academic_batch_id,
-        LMSLessonSchedule.semester_id == request.semester_id,
-        LMSLessonSchedule.section_id == request.section_id,
-        LMSLessonSchedule.plan_date == request.plan_date,
-        LMSLessonSchedule.start_time == request.start_time,
-        LMSLessonSchedule.end_time == request.end_time
-    ).all()
+    if duplicates:
+        return _api_success(
+            data=duplicates,
+            message="Class already scheduled for this time"
+        )
 
-    return {
-        "status": True,
-        "duplicates": [dict(row.__dict__) for row in duplicates]
-    }
+    return _api_success(
+        data=[],
+        message="No conflict found"
+    )
 
 
 def get_scheduled_classes(
@@ -2625,15 +2758,27 @@ def get_scheduled_classes(
 
 def map_lesson(request: MapLessonRequest, db: Session = Depends(get_db)):
     try:
-        section = _resolve_section(db, request.section_id, request.section)
+        schedule = None
+        if request.schedule_id is not None:
+            schedule = db.query(LMSLessonSchedule).filter(
+                LMSLessonSchedule.lls_id == request.schedule_id
+            ).first()
+            if not schedule:
+                return {
+                    "status": False,
+                    "message": "Scheduled class not found"
+                }
+
+        resolved_section_id = request.section_id or (schedule.section_id if schedule else None)
+        section = _resolve_section(db, resolved_section_id, request.section)
         if not section:
             return {
                 "status": False,
                 "message": "Section not found"
             }
 
-        academic_batch_id = request.academic_batch_id or section.academic_batch_id
-        semester_id = request.semester_id or section.semester_id
+        academic_batch_id = request.academic_batch_id or (schedule.academic_batch_id if schedule else None) or section.academic_batch_id
+        semester_id = request.semester_id or (schedule.semester_id if schedule else None) or section.semester_id
 
         topic_query = db.query(CudosTopic).filter(CudosTopic.course_id == request.course_id)
         if semester_id is not None:
@@ -2686,7 +2831,9 @@ def map_lesson(request: MapLessonRequest, db: Session = Depends(get_db)):
                 "mapping_id": mapping.inst_map_id,
                 "topic_id": topic.topic_id,
                 "topic_title": topic.topic_title,
-                "already_exists": False
+                "already_exists": False,
+                "schedule_id": request.schedule_id,
+                "class_date": request.class_date.isoformat() if request.class_date else None,
             })
 
         db.commit()
@@ -2714,6 +2861,20 @@ def add_extra_class(request: ExtraClassRequest, db: Session = Depends(get_db)):
             mapping = db.query(LMSMapInstructorTopic).filter(
                 LMSMapInstructorTopic.topic_id == request.topic_id
             ).order_by(LMSMapInstructorTopic.inst_map_id.desc()).first()
+        elif request.course_id is not None and request.section_id is not None:
+            mapping_query = db.query(LMSMapInstructorTopic).filter(
+                LMSMapInstructorTopic.crs_id == request.course_id,
+                LMSMapInstructorTopic.section_id == request.section_id,
+            )
+            if request.academic_batch_id is not None:
+                mapping_query = mapping_query.filter(
+                    LMSMapInstructorTopic.academic_batch_id == request.academic_batch_id
+                )
+            if request.semester_id is not None:
+                mapping_query = mapping_query.filter(
+                    LMSMapInstructorTopic.semester_id == request.semester_id
+                )
+            mapping = mapping_query.order_by(LMSMapInstructorTopic.inst_map_id.desc()).first()
 
         if not mapping:
             return {
@@ -2771,6 +2932,10 @@ def add_extra_class(request: ExtraClassRequest, db: Session = Depends(get_db)):
             "message": "Extra class added successfully",
             "data": {
                 "mapping_id": mapping.inst_map_id,
+                "course_id": request.course_id,
+                "section_id": request.section_id,
+                "academic_batch_id": request.academic_batch_id,
+                "semester_id": request.semester_id,
                 "schedule": _topic_schedule_payload(schedule, portion)
             }
         }
@@ -2876,6 +3041,7 @@ def get_students(
     academic_batch_id: Optional[int] = None,
     semester_id: Optional[int] = None,
     section: Optional[str] = None,
+    section_id: Optional[int] = None,
     db: Session = Depends(get_db),
     org_id: Optional[int] = Header(None)
 ):
@@ -2889,7 +3055,16 @@ def get_students(
         semester_value = db.query(IEMSemester.semester).filter(IEMSemester.semester_id == semester_id).scalar()
         if semester_value is not None:
             query = query.filter(IEMStudents.current_semester == semester_value)
-    if section:
+    if section_id is not None:
+        section_value = db.query(IEMSection.section).filter(IEMSection.id == section_id).scalar()
+        if section_value is None:
+            return {
+                "status": True,
+                "total": 0,
+                "data": []
+            }
+        query = query.filter(IEMStudents.section == section_value)
+    elif section:
         query = query.filter(IEMStudents.section == section)
 
     students = query.order_by(IEMStudents.student_id.asc()).all()
@@ -2918,43 +3093,36 @@ def get_students(
     }
 
 
+def get_topic_lessons(
+    topic_id: int,
+    db: Session = Depends(get_db)
+):
+    lessons = db.query(
+        TopicLessonSchedule.lesson_schedule_id,
+        LMSMapPortionLS.portion_ref,
+    ).outerjoin(
+        LMSMapPortionLS,
+        TopicLessonSchedule.lesson_schedule_id == LMSMapPortionLS.lesson_schedule_id,
+    ).filter(
+        TopicLessonSchedule.topic_id == topic_id
+    ).order_by(
+        TopicLessonSchedule.lesson_schedule_id.asc()
+    ).all()
+
+    data = [{
+        "lesson_id": row.lesson_schedule_id,
+        "lesson_name": row.portion_ref or f"Lesson {row.lesson_schedule_id}",
+    } for row in lessons]
+
+    return _api_success(data=data, message="Data fetched successfully")
+
+
 def get_timetable(
     academic_batch_id: int,
     semester_id: int,
     db: Session = Depends(get_db)
 ):
-
-    query = text("""
-        SELECT 
-            s.plan_date,
-            s.start_time,
-            s.end_time,
-            c.crs_title,
-            sec.section,
-            u.full_name AS faculty_name
-        FROM lms_lesson_schedule s
-        LEFT JOIN iems_courses c 
-            ON s.crs_id = c.crs_id
-        LEFT JOIN iems_section sec 
-            ON s.section_id = sec.id
-        LEFT JOIN faculty_time_table ft 
-            ON s.time_table_id = ft.tt_id
-        LEFT JOIN erp_users u 
-            ON ft.faculty_id = u.erp_user_id
-        WHERE s.academic_batch_id = :academic_batch_id
-        AND s.semester_id = :semester_id
-        ORDER BY s.plan_date, s.start_time
-    """)
-
-    result = db.execute(
-        query,
-        {
-            "academic_batch_id": academic_batch_id,
-            "semester_id": semester_id
-        }
-    ).fetchall()
-
-    return [dict(row._mapping) for row in result]
+    return get_timetable_data(academic_batch_id, semester_id, db)
 
 
 from fastapi.responses import FileResponse
@@ -2963,43 +3131,107 @@ from reportlab.pdfgen import canvas
 import tempfile
 
 
+def _format_timetable_time(value):
+    if value is None:
+        return None
+
+    if isinstance(value, timedelta):
+        total_seconds = int(value.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    if isinstance(value, time):
+        return value.strftime("%H:%M")
+
+    if isinstance(value, (int, float)):
+        total_seconds = int(value)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    value_str = str(value).strip()
+    if value_str.isdigit():
+        total_seconds = int(value_str)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    if ":" in value_str:
+        parts = value_str.split(":")
+        if len(parts) >= 2:
+            return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+
+    return value_str
+
+
+def get_timetable_data(
+    academic_batch_id: int,
+    semester_id: int,
+    db: Session,
+    section_id: Optional[int] = None,
+):
+    rows = db.query(
+        LMSLessonSchedule.lls_id,
+        LMSLessonSchedule.crs_id,
+        LMSLessonSchedule.plan_date,
+        LMSLessonSchedule.start_time,
+        LMSLessonSchedule.end_time,
+        IEMSCourses.crs_title,
+        IEMSCourses.crs_code,
+        IEMSection.section,
+    ).outerjoin(
+        IEMSCourses,
+        LMSLessonSchedule.crs_id == IEMSCourses.crs_id,
+    ).outerjoin(
+        IEMSection,
+        LMSLessonSchedule.section_id == IEMSection.id,
+    ).filter(
+        LMSLessonSchedule.academic_batch_id == academic_batch_id,
+        LMSLessonSchedule.semester_id == semester_id,
+    )
+
+    if section_id is not None:
+        rows = rows.filter(LMSLessonSchedule.section_id == section_id)
+
+    rows = rows.order_by(
+        LMSLessonSchedule.plan_date.asc(),
+        LMSLessonSchedule.start_time.asc(),
+    ).all()
+
+    timetable_data = [
+        {
+            "schedule_id": row.lls_id,
+            "crs_id": row.crs_id,
+            "plan_date": row.plan_date,
+            "start_time": _format_timetable_time(row.start_time),
+            "end_time": _format_timetable_time(row.end_time),
+            "crs_title": row.crs_title,
+            "crs_code": row.crs_code,
+            "section": row.section,
+            "section_id": section_id,
+            "academic_batch_id": academic_batch_id,
+            "semester_id": semester_id,
+            "faculty_name": "Not Assigned",
+        }
+        for row in rows
+    ]
+    print(timetable_data)
+    return timetable_data
+
+
 def export_timetable_pdf(
     academic_batch_id: int,
     semester_id: int,
     db: Session = Depends(get_db)
 ):
+    timetable = get_timetable_data(academic_batch_id, semester_id, db)
 
-    query = text("""
-        SELECT 
-            s.plan_date,
-            s.start_time,
-            s.end_time,
-            c.crs_title,
-            sec.section,
-            u.full_name AS faculty_name
-        FROM lms_lesson_schedule s
-        LEFT JOIN iems_courses c 
-            ON s.crs_id = c.crs_id
-        LEFT JOIN iems_section sec 
-            ON s.section_id = sec.id
-        LEFT JOIN faculty_time_table ft 
-            ON s.time_table_id = ft.tt_id
-        LEFT JOIN erp_users u 
-            ON ft.faculty_id = u.erp_user_id
-        WHERE s.academic_batch_id = :academic_batch_id
-        AND s.semester_id = :semester_id
-        ORDER BY s.plan_date, s.start_time
-    """)
-
-    result = db.execute(
-        query,
-        {
-            "academic_batch_id": academic_batch_id,
-            "semester_id": semester_id
-        }
-    ).fetchall()
-
-    timetable = [dict(row._mapping) for row in result]
+    if not timetable:
+        raise HTTPException(
+            status_code=404,
+            detail="No timetable data found for the given academic_batch_id and semester_id"
+        )
 
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
 
@@ -3010,12 +3242,16 @@ def export_timetable_pdf(
     c.drawString(200, 780, "Class Timetable")
 
     for row in timetable:
-        line = f"{row['plan_date']} | {row['start_time']} - {row['end_time']} | {row['crs_title']} | {row['section']} | {row['faculty_name']}"
+        course_label = row["crs_title"] or row["crs_code"] or "N/A"
+        faculty_label = row["faculty_name"] or "N/A"
+        line = f"{row['plan_date']} | {row['start_time']} - {row['end_time']} | {course_label} | {row['section'] or 'N/A'} | {faculty_label}"
         c.drawString(50, y, line)
         y -= 20
 
         if y < 100:
             c.showPage()
+            c.setFont("Helvetica", 12)
+            c.drawString(200, 780, "Class Timetable")
             y = 750
 
     c.save()

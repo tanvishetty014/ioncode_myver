@@ -4201,8 +4201,8 @@ class LMSLessonSchedule(Base):
     status = Column(Integer, default=0)
 
     # Fields from Version A (Actual Execution)
-    conduction_date = Column(Date, nullable=True)
-    actual_delivery_date = Column(Date, nullable=True)
+    # conduction_date = Column(Date, nullable=True)
+    # actual_delivery_date = Column(Date, nullable=True)
 
     # Combined Audit Fields
     created_by = Column(Integer, nullable=True)

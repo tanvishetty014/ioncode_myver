@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query  # Added Query here
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 from datetime import date
 
 from ...db import models
@@ -12,41 +14,93 @@ from ...core.database import get_db
 from ..services import timetable_service 
 from app.api.v1.ems_module.comman_functions.comman_function import (
     export_timetable_pdf,
+    get_timetable_data,
     get_timetable,
 )
 
 router = APIRouter(tags=["Curriculum & Scheduling"])
 
+
+def _success_response(data, message: str = "Data fetched successfully", status_code: int = status.HTTP_200_OK):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status_code,
+            "message": message,
+            "data": jsonable_encoder(data),
+        },
+    )
+
+
+def _error_response(message: str, error: str, status_code: int = status.HTTP_400_BAD_REQUEST):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status_code,
+            "message": message,
+            "error": error,
+        },
+    )
+
 # --- EXISTING CODE ---
 
-@router.get("/timetable/timetables", response_model=List[TimeTableOut])
-def get_timetables(term: str, section: str, db: Session = Depends(get_db)):
-    results = db.query(
-        models.IEMSTimeTable.time_table_id,
-        models.IEMSTimeTable.crs_code,
-        models.IEMSTimeTable.start_time,
-        models.IEMSTimeTable.end_time,
-        models.IEMSemTimeTable.section,
-        models.IEMSemTimeTable.term
-    ).join(
-        models.IEMSemTimeTable,
-        models.IEMSemTimeTable.id == models.IEMSTimeTable.sem_time_table_id
-    ).filter(
-        models.IEMSemTimeTable.term == term,
-        models.IEMSemTimeTable.section == section
-    ).all()
+@router.get("/timetable/timetables")
+def get_timetables(term: int, section: int, db: Session = Depends(get_db)):
+    section_row = db.query(models.IEMSection).filter(
+        models.IEMSection.id == section,
+        models.IEMSection.semester_id == term
+    ).first()
 
-    return [
-        {
-            "time_table_id": row[0],
-            "crs_code": row[1],
-            "start_time": row[2],
-            "end_time": row[3],
-            "section": row[4],
-            "term": row[5]
-        }
-        for row in results
-    ]
+    if not section_row:
+        return _error_response(
+            message="Invalid input",
+            error="Section not found for the provided crclm_term_id"
+        )
+
+    term_row = db.query(models.IEMSCrclmTerm).filter(
+        models.IEMSCrclmTerm.crclm_term_id == term
+    ).first()
+
+    if not term_row:
+        return _error_response(
+            message="Invalid input",
+            error="crclm_term_id not found"
+        )
+
+    semester_row = db.query(models.IEMSemester).filter(
+        models.IEMSemester.academic_batch_id == section_row.academic_batch_id,
+        models.IEMSemester.semester == term_row.term_name,
+        models.IEMSemester.status == 1,
+    ).order_by(models.IEMSemester.semester_id.asc()).first()
+
+    if not semester_row:
+        return _error_response(
+            message="Invalid input",
+            error="No valid semester found for the provided crclm_term_id"
+        )
+
+    timetable_rows = get_timetable_data(
+        academic_batch_id=section_row.academic_batch_id,
+        semester_id=semester_row.semester_id,
+        section_id=section_row.id,
+        db=db,
+    )
+
+    data = [{
+        "schedule_id": row["schedule_id"],
+        "subject": row["crs_title"] or row["crs_code"],
+        "faculty": row["faculty_name"] or "Not Assigned",
+        "date": row["plan_date"],
+        "start_time": row["start_time"],
+        "end_time": row["end_time"],
+        "crs_id": row["crs_id"],
+        "section_id": section_row.id,
+        "section_name": section_row.section,
+        "academic_batch_id": section_row.academic_batch_id,
+        "semester_id": semester_row.semester_id,
+        "crclm_term_id": term_row.crclm_term_id,
+    } for row in timetable_rows]
+    return _success_response(data)
 
 # --- NEW TASKS AMENDED ---
 
@@ -99,11 +153,11 @@ def sync_dates(
 
 
 # --- New endpoints requested ---
-@router.get("/timetable/created-dates", response_model=List[date])
+@router.get("/timetable/created-dates")
 def get_created_dates(crs_code: str = Query(..., description="Course code"), db: Session = Depends(get_db)):
     """Return list of distinct creation dates for timetable entries for a given course."""
     dates = timetable_service.get_timetable_created_dates_for_course(db, crs_code)
-    return dates
+    return _success_response(dates)
 
 
 @router.get("/timetable/has-lesson")
@@ -125,4 +179,9 @@ def has_lesson(crs_code: str = Query(..., description="Course code"),
 
 
 # router.add_api_route("/comman_function/timetable", get_timetable, methods=["GET"])
-# router.add_api_route("/comman_function/timetable/export-pdf", export_timetable_pdf, methods=["GET"])
+router.add_api_route(
+    "/timetable/export-pdf",
+    export_timetable_pdf,
+    methods=["GET"],
+    include_in_schema=True,
+)

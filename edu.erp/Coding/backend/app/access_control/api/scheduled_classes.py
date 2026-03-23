@@ -1,6 +1,10 @@
+from datetime import timedelta, time
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 
 from ...db import models
 from app.access_control.schemas.curriculum_schemas import (
@@ -11,25 +15,91 @@ from app.api.v1.ems_module.comman_functions.comman_function import (
     add_extra_class,
     check_duplicate,
     get_scheduled_classes,
+    get_topic_lessons,
     save_schedule,
 )
 
 router = APIRouter(tags=["Curriculum & Scheduling"])
 
 
+def _success_response(data, message: str = "Data fetched successfully", status_code: int = status.HTTP_200_OK):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status_code,
+            "message": message,
+            "data": jsonable_encoder(data),
+        },
+    )
+
+
+def _format_time_value(value):
+    if value is None:
+        return None
+
+    if isinstance(value, timedelta):
+        total_seconds = int(value.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    if isinstance(value, time):
+        return value.strftime("%H:%M")
+
+    value_str = str(value).strip()
+    if len(value_str) >= 5 and ":" in value_str:
+        parts = value_str.split(":")
+        return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+
+    return value_str
+
+
 # --- 5. List Scheduled Classes API ---
-@router.get("/timetable/scheduled-classes", response_model=List[ScheduledClassOut])
+@router.get("/timetable/scheduled-classes")
 def list_scheduled_classes(
     section: Optional[str] = None,
     date: Optional[str] = None,
+    academic_batch_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    course_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.IEMSCustomTimeTable)
+    query = db.query(models.LMSLessonSchedule)
     if section:
-        query = query.filter(models.IEMSCustomTimeTable.section == section)
+        section_row = db.query(models.IEMSection).filter(
+            models.IEMSection.section == section
+        ).order_by(models.IEMSection.id.asc()).first()
+        if not section_row:
+            return _success_response([])
+        query = query.filter(models.LMSLessonSchedule.section_id == section_row.id)
     if date:
-        query = query.filter(models.IEMSCustomTimeTable.date == date)
-    return query.all()
+        query = query.filter(models.LMSLessonSchedule.plan_date == date)
+    if academic_batch_id is not None:
+        query = query.filter(models.LMSLessonSchedule.academic_batch_id == academic_batch_id)
+    if semester_id is not None:
+        query = query.filter(models.LMSLessonSchedule.semester_id == semester_id)
+    if course_id is not None:
+        query = query.filter(models.LMSLessonSchedule.crs_id == course_id)
+
+    rows = query.order_by(
+        models.LMSLessonSchedule.plan_date.asc(),
+        models.LMSLessonSchedule.start_time.asc()
+    ).all()
+
+    data = [
+        {
+            "lls_id": row.lls_id,
+            "crs_id": row.crs_id,
+            "plan_date": row.plan_date,
+            "start_time": _format_time_value(row.start_time),
+            "end_time": _format_time_value(row.end_time),
+            "section_id": row.section_id,
+            "academic_batch_id": row.academic_batch_id,
+            "semester_id": row.semester_id,
+        }
+        for row in rows
+    ]
+    return _success_response(data)
 
 
 # --- 6. Edit Scheduled Class API ---
@@ -77,3 +147,4 @@ router.add_api_route("/comman_function/schedule-class", save_schedule, methods=[
 router.add_api_route("/comman_function/check-duplicate", check_duplicate, methods=["POST"])
 # router.add_api_route("/comman_function/scheduled-classes", get_scheduled_classes, methods=["GET"])
 router.add_api_route("/comman_function/add-extra-class", add_extra_class, methods=["POST"])
+router.add_api_route("/comman_function/topic-lessons", get_topic_lessons, methods=["GET"])
