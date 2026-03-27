@@ -18,7 +18,7 @@ from app.api.v1.ems_module.comman_functions.comman_function import (
 from app.access_control.services import timetable_service
 from ...core.database import get_db
 
-router = APIRouter(tags=["Curriculum & Scheduling"])
+router = APIRouter(prefix="/timetable", tags=["Curriculum & Scheduling"])
 
 
 def _success_response(data, message="Success"):
