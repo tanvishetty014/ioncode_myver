@@ -132,17 +132,34 @@ def copy_class_day(from_date: date, to_date: date, section_id: int, db: Session 
     db.commit()
     return {"status": True, "message": "Day copied"}
 
-# --- API 4: DELETE TIMETABLE ---
+# -# --- API 4: DELETE TIMETABLE (REWRITTEN TO FIX 500 ERROR) ---
 @router.delete("/delete-timetable")
 def delete_timetable(academic_batch_id: int, semester_id: int, section_id: int, db: Session = Depends(get_db)):
-    db.query(models.LMSLessonSchedule).filter(
-        models.LMSLessonSchedule.academic_batch_id == academic_batch_id,
-        models.LMSLessonSchedule.semester_id == semester_id,
-        models.LMSLessonSchedule.section_id == section_id
-    ).delete()
-    db.commit()
-    return {"status": True, "message": "Deleted"}
+    try:
+        # We query the classes based on the three IDs
+        # synchronize_session=False is critical for bulk deletes to prevent 500 errors
+        deleted_count = db.query(models.LMSLessonSchedule).filter(
+            models.LMSLessonSchedule.academic_batch_id == academic_batch_id,
+            models.LMSLessonSchedule.semester_id == semester_id,
+            models.LMSLessonSchedule.section_id == section_id
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+        
+        return {
+            "status": True, 
+            "message": "Timetable deleted successfully", 
+            "deleted_rows": deleted_count
+        }
 
+    except Exception as e:
+        db.rollback()
+        # This print will show up in your black terminal window
+        print(f"!!! DATABASE ERROR ON DELETE: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Internal Server Error: {str(e)}"
+        )
 
 # --- API 5: RESET DATES ---
 @router.post("/reset-timetable-date")
@@ -171,3 +188,34 @@ def reset_timetable(payload: ResetDatePayload): # Removed 'db' dependency for no
         }
     except Exception as e:
         return {"status": False, "message": str(e)}
+
+
+# --- API 6: DELETE INDIVIDUAL CLASS ---
+@router.delete("/delete-class/{lls_id}")
+def delete_individual_class(lls_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes a single scheduled class instance.
+    """
+    # 1. Find the record
+    db_class = db.query(models.LMSLessonSchedule).filter(
+        models.LMSLessonSchedule.lls_id == lls_id
+    ).first()
+
+    # 2. If not found, throw 404
+    if not db_class:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Class record not found in database"
+        )
+
+    # 3. Delete and commit
+    try:
+        db.delete(db_class)
+        db.commit()
+        return {"status": True, "message": "Class instance deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Database error: {str(e)}"
+        )
