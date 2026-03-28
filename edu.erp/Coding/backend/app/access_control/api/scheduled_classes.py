@@ -54,9 +54,7 @@ def _format_time_value(value):
     return value_str
 
 
-# --- 5. List Scheduled Classes API ---
-@router.get("/timetable/scheduled-classes")
-def list_scheduled_classes(
+def _scheduled_classes_array(
     section: Optional[str] = None,
     date: Optional[str] = None,
     academic_batch_id: Optional[int] = None,
@@ -70,7 +68,7 @@ def list_scheduled_classes(
             models.IEMSection.section == section
         ).order_by(models.IEMSection.id.asc()).first()
         if not section_row:
-            return _success_response([])
+            return []
         query = query.filter(models.LMSLessonSchedule.section_id == section_row.id)
     if date:
         query = query.filter(models.LMSLessonSchedule.plan_date == date)
@@ -86,7 +84,7 @@ def list_scheduled_classes(
         models.LMSLessonSchedule.start_time.asc()
     ).all()
 
-    data = [
+    return [
         {
             "lls_id": row.lls_id,
             "crs_id": row.crs_id,
@@ -99,6 +97,19 @@ def list_scheduled_classes(
         }
         for row in rows
     ]
+
+
+# --- 5. List Scheduled Classes API ---
+@router.get("/timetable/scheduled-classes")
+def list_scheduled_classes(
+    section: Optional[str] = None,
+    date: Optional[str] = None,
+    academic_batch_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    course_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    data = _scheduled_classes_array(section, date, academic_batch_id, semester_id, course_id, db)
     return _success_response(data)
 
 
@@ -145,6 +156,7 @@ def delete_scheduled_class(class_id: int, db: Session = Depends(get_db)):
 
 router.add_api_route("/comman_function/schedule-class", save_schedule, methods=["POST"])
 router.add_api_route("/comman_function/check-duplicate", check_duplicate, methods=["POST"])
-# router.add_api_route("/comman_function/scheduled-classes", get_scheduled_classes, methods=["GET"])
+router.add_api_route("/comman_function/scheduled-classes", _scheduled_classes_array, methods=["GET"])
+router.add_api_route("/common_function/scheduled-classes", _scheduled_classes_array, methods=["GET"])
 router.add_api_route("/comman_function/add-extra-class", add_extra_class, methods=["POST"])
 router.add_api_route("/comman_function/topic-lessons", get_topic_lessons, methods=["GET"])

@@ -2368,14 +2368,17 @@ class BatchSectionRequest(BaseModel):
 
 
 class ScheduleRequest(BaseModel):
-    academic_batch_id: int
-    semester_id: int
-    crs_id: int
-    section_id: int
-    plan_date: date
-    start_time: str
-    end_time: str
-    created_by: int
+    academic_batch_id: Optional[int] = None
+    semester_id: Optional[int] = None
+    crs_id: Optional[int] = None
+    course_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    faculty_id: Optional[int] = None
+    section_id: Optional[int] = None
+    plan_date: Optional[date] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    created_by: Optional[int] = 1
 
 # class ScheduleRequest(BaseModel):
 #     academic_batch_id: int = Field(alias="academicBatchId")
@@ -2633,6 +2636,21 @@ def list_batch_sections(request: BatchSectionRequest, db: Session = Depends(get_
 
 
 def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
+    missing_fields = []
+    for field_name in ("academic_batch_id", "semester_id", "section_id", "subject_id", "faculty_id", "plan_date", "start_time", "end_time"):
+        if getattr(request, field_name) in (None, ""):
+            missing_fields.append(field_name)
+
+    course_value = request.crs_id or request.course_id
+    if course_value in (None, ""):
+        missing_fields.append("course_id")
+
+    if missing_fields:
+        return _api_error(
+            message="Invalid input",
+            error=f"Missing required fields: {', '.join(missing_fields)}"
+        )
+
     try:
         resolved_semester_id = _resolve_semester_id(
             db,
@@ -2660,7 +2678,7 @@ def save_schedule(request: ScheduleRequest, db: Session = Depends(get_db)):
     new_schedule = LMSLessonSchedule(
         academic_batch_id=request.academic_batch_id,
         semester_id=resolved_semester_id,
-        crs_id=request.crs_id,
+        crs_id=course_value,
         section_id=request.section_id,
         plan_date=request.plan_date,
         start_time=request.start_time,
@@ -2742,8 +2760,6 @@ def get_scheduled_classes(
             "plan_date": row.plan_date.isoformat() if row.plan_date else None,
             "start_time": row.start_time,
             "end_time": row.end_time,
-            "conduction_date": row.conduction_date.isoformat() if row.conduction_date else None,
-            "actual_delivery_date": row.actual_delivery_date.isoformat() if row.actual_delivery_date else None,
             "status": row.status,
             "crs_code": course.crs_code if course else None,
             "crs_title": course.crs_title if course else None,
@@ -3180,12 +3196,27 @@ def get_timetable_data(
         IEMSCourses.crs_title,
         IEMSCourses.crs_code,
         IEMSection.section,
+        LMSMapInstructorTopic.instructor_id,
+        IEMSUsers.first_name,
+        IEMSUsers.last_name,
+        IEMSUsers.username,
     ).outerjoin(
         IEMSCourses,
         LMSLessonSchedule.crs_id == IEMSCourses.crs_id,
     ).outerjoin(
         IEMSection,
         LMSLessonSchedule.section_id == IEMSection.id,
+    ).outerjoin(
+        LMSMapInstructorTopic,
+        and_(
+            LMSLessonSchedule.crs_id == LMSMapInstructorTopic.crs_id,
+            LMSLessonSchedule.section_id == LMSMapInstructorTopic.section_id,
+            LMSLessonSchedule.semester_id == LMSMapInstructorTopic.semester_id,
+            LMSLessonSchedule.academic_batch_id == LMSMapInstructorTopic.academic_batch_id,
+        ),
+    ).outerjoin(
+        IEMSUsers,
+        LMSMapInstructorTopic.instructor_id == IEMSUsers.id,
     ).filter(
         LMSLessonSchedule.academic_batch_id == academic_batch_id,
         LMSLessonSchedule.semester_id == semester_id,
@@ -3206,13 +3237,20 @@ def get_timetable_data(
             "plan_date": row.plan_date,
             "start_time": _format_timetable_time(row.start_time),
             "end_time": _format_timetable_time(row.end_time),
+            "date": row.plan_date,
+            "course": row.crs_code or "N/A",
+            "subject": row.crs_title or row.crs_code or "N/A",
             "crs_title": row.crs_title,
             "crs_code": row.crs_code,
             "section": row.section,
             "section_id": section_id,
             "academic_batch_id": academic_batch_id,
             "semester_id": semester_id,
-            "faculty_name": "Not Assigned",
+            "faculty_name": (
+                " ".join([part for part in [row.first_name, row.last_name] if part]).strip()
+                or row.username
+                or "Not Assigned"
+            ),
         }
         for row in rows
     ]
@@ -3242,9 +3280,10 @@ def export_timetable_pdf(
     c.drawString(200, 780, "Class Timetable")
 
     for row in timetable:
-        course_label = row["crs_title"] or row["crs_code"] or "N/A"
-        faculty_label = row["faculty_name"] or "N/A"
-        line = f"{row['plan_date']} | {row['start_time']} - {row['end_time']} | {course_label} | {row['section'] or 'N/A'} | {faculty_label}"
+        course_label = row["course"] or "N/A"
+        subject_label = row["subject"] or "N/A"
+        faculty_label = row["faculty_name"] or "Not Assigned"
+        line = f"{row['date']} | {row['start_time']} - {row['end_time']} | {course_label} | {subject_label} | {faculty_label}"
         c.drawString(50, y, line)
         y -= 20
 
