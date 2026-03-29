@@ -69,7 +69,7 @@ def copy_class_day_logic(db: Session, source_date: date, target_date: date, sect
             pgm_id=cls.pgm_id,
             dept_id=cls.dept_id,
             academic_batch=cls.academic_batch,
-            semester=cls.semester,
+            semester_id=cls.semester,
             section=cls.section,
             date=target_date, # Use the NEW date
             start_time=cls.start_time,
@@ -136,7 +136,7 @@ def sync_timetable_dates_logic(db: Session, sem_time_table_id: int, new_end_date
                         pgm_id=t_cls.pgm_id,
                         dept_id=t_cls.dept_id,
                         academic_batch=t_cls.academic_batch,
-                        semester=t_cls.semester,
+                        semester_id=t_cls.semester,
                         section=t_cls.section,
                         date=current_date,
                         start_time=t_cls.start_time,

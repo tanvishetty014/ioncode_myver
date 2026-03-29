@@ -92,11 +92,62 @@ def read_root():
 # =================================================================
 @app.get("/api/v1/hierarchy/programs", response_model=List[DropdownResponse])
 def get_programs(dept_id: int, db: Session = Depends(get_db)):
-    return [{"id": 1, "name": "B.E Computer Science"}]
+    # Real query to fetch programs based on the department selected
+    query = text("SELECT pg_id AS id, pg_name AS name FROM iems_program WHERE dept_id = :dept_id")
+    rows = db.execute(query, {"dept_id": dept_id}).mappings().all()
+    return rows
+
+# Add this to your main.py
+@app.get("/api/v1/hierarchy/departments", response_model=List[DropdownResponse])
+def get_departments(db: Session = Depends(get_db)):
+    # This SQL query fetches real departments from your database
+    query = text("SELECT dept_id AS id, dept_name AS name FROM iems_department ORDER BY dept_name ASC")
+    rows = db.execute(query).mappings().all()
+    
+    # If the table is empty, it returns this dummy data so your UI doesn't break
+    if not rows:
+        return [{"id": 1, "name": "Computer Science"}, {"id": 2, "name": "Information Technology"}]
+        
+    return rows
 
 @app.get("/api/v1/hierarchy/terms", response_model=List[DropdownResponse])
 def get_terms(curriculum_id: int, db: Session = Depends(get_db)):
-    return [{"id": 4, "name": "Semester 4"}]
+    # Real query to fetch terms (semesters) based on the curriculum (academic batch)
+    query = text("""
+        SELECT semester_id AS id, semester AS name 
+        FROM iems_semester 
+        WHERE academic_batch_id = :curriculum_id 
+        ORDER BY semester_id ASC
+    """)
+    rows = db.execute(query, {"curriculum_id": curriculum_id}).mappings().all()
+    
+    # Fallback if no data is found so the dropdown doesn't look broken
+    if not rows:
+        return [{"id": 0, "name": "No Terms Found"}]
+        
+    return rows
+
+
+
+# @app.get("/api/v1/hierarchy/terms", response_model=List[DropdownResponse])
+# def get_terms(curriculum_id: int, db: Session = Depends(get_db)):
+#     return [{"id": 4, "name": "Semester 4"}]
+
+@app.get("/api/v1/hierarchy/sections", response_model=List[DropdownResponse])
+def get_sections(term_id: int, db: Session = Depends(get_db)):
+    # Real query to fetch sections based on the term (semester) selected
+    query = text("""
+        SELECT id AS id, section AS name 
+        FROM iems_section 
+        WHERE semester_id = :term_id 
+        ORDER BY section ASC
+    """)
+    rows = db.execute(query, {"term_id": term_id}).mappings().all()
+    
+    if not rows:
+        return [{"id": 0, "name": "No Sections Found"}]
+        
+    return rows
 
 # =================================================================
 # FIXED TIMETABLE LOGIC APIS (YOUR ASSIGNED TASKS)
@@ -134,30 +185,66 @@ def delete_timetable_day(tt_detail_id: int, class_date: str, db: Session = Depen
     return {"message": f"Timetable for {class_date} deleted", "deleted_count": result.rowcount}
 
 # 3. API for Reset Timetable Date (Shifting)
+from sqlalchemy import text
+
+import traceback # Put this at the very top of the file
+
 @app.put("/api/v1/timetable/reset-date")
 def reset_timetable_date(req: ResetTimetableRequest, db: Session = Depends(get_db)):
-    """Shifts all classes based on a new start date."""
-    res = db.execute(text("SELECT tt_start_date FROM lms_tt_time_table_details WHERE tt_detail_id = :id"), {"id": req.tt_detail_id}).fetchone()
-    if not res: 
-        raise HTTPException(status_code=404, detail="Timetable not found")
+    print(f"DEBUG: Resetting Timetable ID {req.tt_detail_id} to {req.new_start_date}") # Check your terminal for this!
     
     try:
-        old_start = datetime.strptime(str(res[0]), '%Y-%m-%d').date()
+        # 1. Check if the timetable exists
+        res = db.execute(
+            text("SELECT tt_start_date FROM lms_tt_time_table_details WHERE tt_detail_id = :id"), 
+            {"id": req.tt_detail_id}
+        ).fetchone()
+        
+        if not res: 
+            print("DEBUG: Timetable not found in DB")
+            return {"status": False, "message": "Timetable not found"}
+        
+        # 2. Convert dates
+        old_start_str = str(res[0])
+        try:
+            # Try standard format first
+            old_start = datetime.strptime(old_start_str, '%Y-%m-%d').date()
+        except:
+            # If DB is DD-MM-YYYY
+            old_start = datetime.strptime(old_start_str, '%d-%m-%Y').date()
+
         new_start = datetime.strptime(req.new_start_date, '%Y-%m-%d').date()
         delta = (new_start - old_start).days
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD")
 
-    shift_script = text("""
-        UPDATE lms_tt_time_table_day_mapping 
-        SET class_date = DATE_ADD(STR_TO_DATE(class_date, '%Y-%m-%d'), INTERVAL :days DAY)
-        WHERE tt_detail_id = :tt_id
-    """)
-    db.execute(shift_script, {"days": delta, "tt_id": req.tt_detail_id})
-    db.execute(text("UPDATE lms_tt_time_table_details SET tt_start_date = :d WHERE tt_detail_id = :id"), 
-               {"d": req.new_start_date, "id": req.tt_detail_id})
-    db.commit()
-    return {"message": "Timetable dates shifted successfully", "days_shifted": delta}
+        # 3. UPDATE THE MAPPING
+        # We try both formats to be safe
+        db.execute(text("""
+            UPDATE lms_tt_time_table_day_mapping 
+            SET class_date = DATE_FORMAT(DATE_ADD(STR_TO_DATE(class_date, '%d-%m-%Y'), INTERVAL :days DAY), '%d-%m-%Y')
+            WHERE tt_detail_id = :tt_id
+        """), {"days": delta, "tt_id": req.tt_detail_id})
+
+        db.execute(text("""
+            UPDATE lms_tt_time_table_day_mapping 
+            SET class_date = DATE_ADD(class_date, INTERVAL :days DAY)
+            WHERE tt_detail_id = :tt_id AND class_date NOT LIKE '%-%-%'
+        """), {"days": delta, "tt_id": req.tt_detail_id})
+
+        # 4. UPDATE THE MAIN DETAILS TABLE
+        db.execute(
+            text("UPDATE lms_tt_time_table_details SET tt_start_date = :d WHERE tt_detail_id = :id"), 
+            {"d": req.new_start_date, "id": req.tt_detail_id}
+        )
+
+        db.commit()
+        print("DEBUG: Reset Successful")
+        return {"status": True, "message": "Timetable shifted successfully", "delta": delta}
+
+    except Exception as e:
+        db.rollback()
+        print("!!! ERROR DETECTED !!!")
+        print(traceback.format_exc()) # THIS WILL SHOW THE REAL ERROR IN TERMINAL
+        return {"status": False, "message": str(e)} # This will show the real error in React
 
 # 4. API for Update Range (Add/Delete based on range change)
 @app.put("/api/v1/timetable/update-range")
