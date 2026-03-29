@@ -9,6 +9,7 @@ from app.api.v1.student_assignment.student_assignment_routes import router as st
 from .announcement import router as announcement_router
 from .manage_assignment import router as manage_assignment_router
 from .manage_quiz import router as manage_quiz_router
+from .schedule_class import router as schedule_class_router
 from .student_record_report import router as student_record_report_router
 from .attendance_status_report import router as attendance_status_report_router
 
@@ -459,6 +460,11 @@ router.include_router(
     manage_quiz_router,
     prefix="/manage-quiz",
     tags=["Manage Quiz"]
+)
+router.include_router(
+    schedule_class_router,
+    prefix="/schedule-class",
+    tags=["Schedule Class"]
 )
 router.include_router(
     student_record_report_router,
