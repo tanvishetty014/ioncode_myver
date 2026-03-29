@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header
+from pydantic import BaseModel
+from datetime import date
 from sqlalchemy import and_, or_, asc, distinct, func, text, update
 from sqlalchemy.orm import Session
 from datetime import datetime, date, time, timedelta
@@ -30,6 +33,10 @@ from .....db.models import BloomDomain, Caste, City, Country, IEMExamEvent, IEME
     IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, LMSLessonSchedule, \
     State, StudentCourse, CudosTopic, LMSMapInstructorTopic, TopicLessonSchedule, LMSMapPortionLS, IEMFacultyExtraClasses
 
+    IEMSUserRoles, IEMSUsers, IEMSection, IEMSemTimeTable, IEMSemester, IEMStudents, PhysicallyChallengedDescription, \
+    State, StudentCourse
+# cudo_module import commented out because module is missing
+#from ...cudo_module.bloom_domain.model.bloom_domain_model import BloomDomain
 from .....utils.auth_helper import get_current_user
 from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool
@@ -57,6 +64,151 @@ def _api_error(message: str = "Invalid input", error: str = "Error details", sta
             "error": error,
         },
     )
+
+
+class ScheduleClassRequest(BaseModel):
+    academic_batch_id: int
+    crs_id: int
+    section_id: int
+    plan_date: date
+    start_time: str
+    end_time: str
+    created_by: int
+
+from sqlalchemy import text
+from fastapi import Depends
+
+
+
+
+@router.get("/course_type_list_new")
+def course_type_list_new(db: Session = Depends(get_db)):
+    try:
+        query = text("""
+            SELECT course_type_id, course_type_desc
+            FROM iems_course_type
+            WHERE status = 1
+        """)
+
+        result = db.execute(query).fetchall()
+
+        data = [
+    {
+        "course_type_id": row.course_type_id,
+        "course_type_name": row.course_type_desc
+    }
+    for row in result
+            ]
+
+        return {
+            "status": True,
+            "message": "Course types fetched successfully",
+            "data": data
+        }
+
+    except Exception as e:
+        return {
+            "status": False,
+            "message": str(e)
+        }
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from fastapi import Depends
+
+# ✅ Define model FIRST (important!)
+class CourseTypeRequest(BaseModel):
+    course_type_id: int
+
+
+@router.post("/course_list")
+def course_list(request: CourseTypeRequest, db: Session = Depends(get_db)):
+    try:
+        query = text("""
+            SELECT crs_id, crs_title
+            FROM iems_courses
+            WHERE course_type_id = :course_type_id
+            AND status = 1
+        """)
+
+        result = db.execute(query, {
+            "course_type_id": request.course_type_id
+        }).fetchall()
+
+        data = [
+            {
+                "course_id": row.crs_id,
+                "course_name": row.crs_title
+            }
+            for row in result
+        ]
+
+        return {
+            "status": True,
+            "message": "Courses fetched successfully",
+            "data": data
+        }
+
+    except Exception as e:
+        return {
+            "status": False,
+            "message": str(e)
+        }
+
+
+@router.post("/schedule_class")
+def schedule_class(request: ScheduleClassRequest, db: Session = Depends(get_db)):
+    """Schedule a class if timing does not conflict with existing entries."""
+    try:
+        # Check for duplicate timing overlap
+        dup_sql = text(
+            """
+            SELECT 1 FROM lms_lesson_schedule
+            WHERE academic_batch_id = :academic_batch_id
+              AND plan_date = :plan_date
+              AND start_time < :new_end_time
+              AND end_time > :new_start_time
+            LIMIT 1
+            """
+        )
+        dup_params = {
+            "academic_batch_id": request.academic_batch_id,
+            "plan_date": request.plan_date,
+            "new_end_time": request.end_time,
+            "new_start_time": request.start_time,
+        }
+        dup_res = db.execute(dup_sql, dup_params).fetchone()
+        if dup_res:
+            return {"status": False, "message": "Duplicate class timing exists"}
+
+        # Insert new schedule
+        insert_sql = text(
+            """
+            INSERT INTO lms_lesson_schedule
+                (academic_batch_id, crs_id, section_id, plan_date, start_time, end_time, created_by)
+            VALUES
+                (:academic_batch_id, :crs_id, :section_id, :plan_date, :start_time, :end_time, :created_by)
+            """
+        )
+        insert_params = {
+            "academic_batch_id": request.academic_batch_id,
+            "crs_id": request.crs_id,
+            "section_id": request.section_id,
+            "plan_date": request.plan_date,
+            "start_time": request.start_time,
+            "end_time": request.end_time,
+            "created_by": request.created_by,
+        }
+        db.execute(insert_sql, insert_params)
+        db.commit()
+
+        return {"status": True, "message": "Class scheduled successfully"}
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise
 
 
 @router.post("/fetch_result_year")
@@ -1002,6 +1154,8 @@ def fetch_section_list_service(section_request, db: Session, current_user: str):
                 IEMSUserCourseMgmt.academic_batch_id == academic_batch_id if academic_batch_id else None
             ),
         )
+
+
 
     # Handle class attendance joining
     if is_class_attendance:
@@ -3301,3 +3455,95 @@ def export_timetable_pdf(
         filename="timetable.pdf"
     )
 
+class BatchRequest(BaseModel):
+    academic_batch_id: int
+
+
+class ScheduleRequest(BaseModel):
+    crs_id: int
+    section_id: int
+    academic_batch_id: int
+    class_date: str
+    start_time: str
+    end_time: str
+
+
+@router.post("/simple_section_list")
+def simple_section_list(request: BatchRequest, db: Session = Depends(get_db)):
+    try:
+        query = text("""
+            SELECT id, section
+            FROM iems_section
+            WHERE academic_batch_id = :academic_batch_id
+            AND status = 1
+        """)
+
+        result = db.execute(query, {
+            "academic_batch_id": request.academic_batch_id
+        }).fetchall()
+
+        data = [
+            {
+                "section_id": row.id,
+                "section_name": row.section
+            }
+            for row in result
+        ]
+
+        return {
+            "status": True,
+            "message": "Sections fetched successfully",
+            "data": data
+        }
+
+    except Exception as e:
+        return {
+            "status": False,
+            "message": str(e)
+        }
+
+
+@router.post("/simple_schedule_class")
+def simple_schedule_class(request: ScheduleRequest, db: Session = Depends(get_db)):
+    try:
+        # 🔎 Duplicate Check (using correct column names)
+        duplicate_query = text("""
+            SELECT 1 FROM lms_lesson_schedule
+            WHERE crs_id = :crs_id
+            AND section_id = :section_id
+            AND plan_date = :class_date
+            AND (
+                start_time <= :end_time
+                AND end_time >= :start_time
+            )
+        """)
+
+        duplicate = db.execute(duplicate_query, request.dict()).fetchone()
+
+        if duplicate:
+            return {
+                "status": False,
+                "message": "Duplicate class timing detected"
+            }
+
+        # ✅ Insert Schedule (using correct column names)
+        insert_query = text("""
+            INSERT INTO lms_lesson_schedule
+            (crs_id, section_id, academic_batch_id, plan_date, start_time, end_time, status)
+            VALUES
+            (:crs_id, :section_id, :academic_batch_id, :class_date, :start_time, :end_time, 1)
+        """)
+
+        db.execute(insert_query, request.dict())
+        db.commit()
+
+        return {
+            "status": True,
+            "message": "Class scheduled successfully"
+        }
+
+    except Exception as e:
+        return {
+            "status": False,
+            "message": str(e)
+        }

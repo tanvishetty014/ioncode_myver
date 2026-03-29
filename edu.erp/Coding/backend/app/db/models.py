@@ -2950,6 +2950,11 @@ class IEMSUserRoles(Base):
     org_id = Column(Integer, ForeignKey("iems_organisation.org_id"), default=1, nullable=False)
 
     role = relationship("IEMSUserRoleMaster", foreign_keys=[user_role_id])
+    # Map Python attribute `userrole_id` to database column `user_role_id`
+    userrole_id = Column("user_role_id", Integer, primary_key=True, nullable=False)
+    user_id = Column(Integer, nullable=False)
+    role_id = Column(Integer, nullable=False)
+    org_id = Column(Integer, default=1, nullable=True)
 
 
 class IEMSUserRoleMaster(Base):

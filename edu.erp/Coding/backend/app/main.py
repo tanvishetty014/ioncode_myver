@@ -15,6 +15,9 @@ from pydantic import BaseModel
 class DropdownResponse(BaseModel):
     id: int
     name: str
+from .db.models import Base
+from .core.database import engine
+#from app.api.v1.cudo_module.bloom_level import bloom_level as bloom_level_routes
 
 class QuizListSchema(BaseModel):
     quiz_id: int
@@ -59,6 +62,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+    allow_origins=origins,
+    # allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
+
+app.include_router(api_router)
+
+# cudo_module route include commented out because module is missing
+#app.include_router(
+#    bloom_level_routes.router,
+#    prefix="/api/v1/cudo_module", 
+#    tags=["Bloom Level"]
+#)
 
 # Include the main API router
 app.include_router(api_router, prefix="/api/v1")

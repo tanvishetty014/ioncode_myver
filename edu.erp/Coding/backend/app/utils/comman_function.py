@@ -253,6 +253,7 @@ def get_department_permission(user_id: int, current_user: str, db: Session) -> b
     # Query to check the user's roles
     result = (db.query(IEMSUserRoleMaster.department_wise)
                 .join(IEMSUserRoles, IEMSUserRoles.user_role_id == IEMSUserRoleMaster.user_role_id)
+                .join(IEMSUserRoles, IEMSUserRoles.userrole_id == IEMSUserRoleMaster.user_role_id)
                 .filter(IEMSUserRoles.user_id == user_id)
                 .first())
     
