@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 1 Setup (Windows)
 
 //create virtual env
@@ -8,6 +9,17 @@ python -m venv .venv
 
 //Activate (Windows PowerShell)
 .venv\Scripts\Activate
+=======
+1 Setup
+
+//create virtual env
+python -m venv env
+
+python -m venv .venv
+
+//Activate 
+source ./env/bin/activate
+>>>>>>> 8300d09d370d5943178b7404524fb487ab6ec52c
 
 //ensure latest version
 python -m pip install --upgrade pip
@@ -18,6 +30,7 @@ pip install -r requirements.txt
 
 2 Command to runserver 
 //Activate created venv and run app
+<<<<<<< HEAD
 .venv\Scripts\activate
 uvicorn app.main:app --reload
 
@@ -79,3 +92,9 @@ Add Extra Topic
   "created_by": 1
 }
 
+=======
+source ./env/bin/activate
+uvicorn app.main:app --reload
+
+uvicorn app.main:app --reload --host 10.91.0.213 --port 8001
+>>>>>>> 8300d09d370d5943178b7404524fb487ab6ec52c
