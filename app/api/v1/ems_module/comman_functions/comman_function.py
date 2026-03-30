@@ -3300,7 +3300,12 @@ def export_timetable_pdf(
     semester_id: int,
     db: Session = Depends(get_db)
 ):
-    timetable = get_timetable_data(academic_batch_id, semester_id, db)
+    try:
+        resolved_semester_id = _resolve_semester_id(db, academic_batch_id, semester_id)
+    except ValueError:
+        resolved_semester_id = semester_id
+
+    timetable = get_timetable_data(academic_batch_id, resolved_semester_id, db)
 
     if not timetable:
         raise HTTPException(
