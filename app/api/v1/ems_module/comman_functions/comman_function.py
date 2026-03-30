@@ -3,7 +3,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, asc, distinct, func, text, update
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -2370,9 +2370,9 @@ from typing import Optional
 from pydantic import BaseModel
 
 class CourseRequest(BaseModel):
-    academic_batch_id: int
-    semester: Optional[int] = None
-    course_type_id: Optional[int] = None
+    academic_batch_id: int = Field(..., description="Curriculum (academic_batch_id)")
+    semester: Optional[int] = Field(default=None, description="Term (semester)")
+    course_type_id: Optional[int] = Field(default=None, description="Course Type (course_type_id)")
 
 # from pydantic import Field
 
@@ -2382,21 +2382,21 @@ class CourseRequest(BaseModel):
 
 
 class BatchSectionRequest(BaseModel):
-    academic_batch_id: int
-    semester_id: int
+    academic_batch_id: int = Field(..., description="Curriculum (academic_batch_id)")
+    semester_id: int = Field(..., description="Term (semester_id)")
 # class BatchSectionRequest(BaseModel):
 #     academic_batch_id: int = Field(alias="academicBatchId")
 #     semester_id: int = Field(alias="semesterId")
 
 
 class ScheduleRequest(BaseModel):
-    academic_batch_id: Optional[int] = None
-    semester_id: Optional[int] = None
-    crs_id: Optional[int] = None
-    course_id: Optional[int] = None
+    academic_batch_id: Optional[int] = Field(default=None, description="Curriculum (academic_batch_id)")
+    semester_id: Optional[int] = Field(default=None, description="Term (semester_id)")
+    crs_id: Optional[int] = Field(default=None, description="Course (crs_id)")
+    course_id: Optional[int] = Field(default=None, description="Course (course_id)")
     subject_id: Optional[int] = None
     faculty_id: Optional[int] = None
-    section_id: Optional[int] = None
+    section_id: Optional[int] = Field(default=None, description="Section (section_id)")
     plan_date: Optional[date] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
@@ -2414,9 +2414,9 @@ class ScheduleRequest(BaseModel):
 
 
 class DuplicateRequest(BaseModel):
-    academic_batch_id: int
-    semester_id: int
-    section_id: int
+    academic_batch_id: int = Field(..., description="Curriculum (academic_batch_id)")
+    semester_id: int = Field(..., description="Term (semester_id)")
+    section_id: int = Field(..., description="Section (section_id)")
     plan_date: date
     start_time: str
     end_time: str
@@ -2430,11 +2430,11 @@ class DuplicateRequest(BaseModel):
 
 
 class MapLessonRequest(BaseModel):
-    course_id: int
-    section_id: Optional[int] = None
+    course_id: int = Field(..., description="Course (course_id)")
+    section_id: Optional[int] = Field(default=None, description="Section (section_id)")
     section: Optional[str] = None
-    academic_batch_id: Optional[int] = None
-    semester_id: Optional[int] = None
+    academic_batch_id: Optional[int] = Field(default=None, description="Curriculum (academic_batch_id)")
+    semester_id: Optional[int] = Field(default=None, description="Term (semester_id)")
     schedule_id: Optional[int] = None
     class_date: Optional[date] = None
     created_by: int = 1
@@ -2445,10 +2445,10 @@ class MapLessonRequest(BaseModel):
 class ExtraClassRequest(BaseModel):
     mapping_id: Optional[int] = None
     topic_id: Optional[int] = None
-    course_id: Optional[int] = None
-    section_id: Optional[int] = None
-    academic_batch_id: Optional[int] = None
-    semester_id: Optional[int] = None
+    course_id: Optional[int] = Field(default=None, description="Course (course_id)")
+    section_id: Optional[int] = Field(default=None, description="Section (section_id)")
+    academic_batch_id: Optional[int] = Field(default=None, description="Curriculum (academic_batch_id)")
+    semester_id: Optional[int] = Field(default=None, description="Term (semester_id)")
     class_date: date
     start_time: Optional[str] = None
     end_time: Optional[str] = None
@@ -2589,15 +2589,10 @@ def _find_schedule_conflicts(db: Session, request: DuplicateRequest):
 # ---------------- APIs ----------------
 
 def list_course_types(db: Session = Depends(get_db)):
-    course_type_ids = db.query(IEMSCourses.course_type_id).distinct().all()
-    distinct_ids = [row.course_type_id for row in course_type_ids if row.course_type_id is not None]
     course_types = (
         db.query(IEMSCourseType)
-        .filter(IEMSCourseType.course_type_id.in_(distinct_ids))
         .order_by(IEMSCourseType.course_type_id.asc())
         .all()
-        if distinct_ids
-        else []
     )
 
     return {
@@ -2613,15 +2608,35 @@ def list_course_types(db: Session = Depends(get_db)):
 
 
 def list_courses(request: CourseRequest, db: Session = Depends(get_db)):
+    resolved_academic_batch_id = request.academic_batch_id
+    resolved_semester = None
+
+    if request.semester is not None:
+        term = db.query(IEMSCrclmTerm).filter(
+            IEMSCrclmTerm.crclm_term_id == request.semester,
+            IEMSCrclmTerm.crclm_id == request.academic_batch_id,
+        ).first()
+
+        if term:
+            resolved_semester = term.term_name
+        else:
+            resolved_semester = request.semester
+
     query = db.query(IEMSCourses).filter(
-        IEMSCourses.academic_batch_id == request.academic_batch_id
+        IEMSCourses.academic_batch_id == resolved_academic_batch_id
     )
 
     if request.course_type_id is not None:
         query = query.filter(IEMSCourses.course_type_id == request.course_type_id)
 
-    if request.semester is not None and hasattr(IEMSCourses, "semester"):
-        query = query.filter(IEMSCourses.semester == request.semester)
+    if resolved_semester is not None and hasattr(IEMSCourses, "semester"):
+        # Some demo rows are stored without semester; keep them visible for the selected batch/course type.
+        query = query.filter(
+            or_(
+                IEMSCourses.semester == resolved_semester,
+                IEMSCourses.semester.is_(None),
+            )
+        )
 
     courses = query.all()
 

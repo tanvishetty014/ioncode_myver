@@ -55,6 +55,27 @@ def _format_time_value(value):
     return value_str
 
 
+def _resolve_semester_id(db: Session, academic_batch_id: int, crclm_term_id: int) -> int:
+    term = db.query(models.IEMSCrclmTerm).filter(
+        models.IEMSCrclmTerm.crclm_term_id == crclm_term_id,
+        models.IEMSCrclmTerm.crclm_id == academic_batch_id,
+    ).first()
+
+    if not term:
+        raise ValueError("Invalid term selected for the provided curriculum")
+
+    semester = db.query(models.IEMSemester).filter(
+        models.IEMSemester.academic_batch_id == academic_batch_id,
+        models.IEMSemester.semester == term.term_name,
+        models.IEMSemester.status == 1,
+    ).order_by(models.IEMSemester.semester_id.asc()).first()
+
+    if not semester:
+        raise ValueError("No valid semester_id found for the provided term")
+
+    return semester.semester_id
+
+
 def _scheduled_classes_array(
     section: Optional[str] = None,
     date: Optional[str] = None,
@@ -64,10 +85,26 @@ def _scheduled_classes_array(
     db: Session = Depends(get_db)
 ):
     query = db.query(models.LMSLessonSchedule)
+    resolved_semester_id = None
+
+    if semester_id is not None:
+        resolved_semester_id = semester_id
+        if academic_batch_id is not None:
+            try:
+                resolved_semester_id = _resolve_semester_id(db, academic_batch_id, semester_id)
+            except ValueError:
+                return []
+
     if section:
-        section_row = db.query(models.IEMSection).filter(
+        section_query = db.query(models.IEMSection).filter(
             models.IEMSection.section == section
-        ).order_by(models.IEMSection.id.asc()).first()
+        )
+        if academic_batch_id is not None:
+            section_query = section_query.filter(models.IEMSection.academic_batch_id == academic_batch_id)
+        if semester_id is not None:
+            # IEMSection stores the UI term id (crclm_term_id), not iems_semester.semester_id.
+            section_query = section_query.filter(models.IEMSection.semester_id == semester_id)
+        section_row = section_query.order_by(models.IEMSection.id.asc()).first()
         if not section_row:
             return []
         query = query.filter(models.LMSLessonSchedule.section_id == section_row.id)
@@ -75,10 +112,25 @@ def _scheduled_classes_array(
         query = query.filter(models.LMSLessonSchedule.plan_date == date)
     if academic_batch_id is not None:
         query = query.filter(models.LMSLessonSchedule.academic_batch_id == academic_batch_id)
-    if semester_id is not None:
-        query = query.filter(models.LMSLessonSchedule.semester_id == semester_id)
+    if resolved_semester_id is not None:
+        query = query.filter(models.LMSLessonSchedule.semester_id == resolved_semester_id)
     if course_id is not None:
         query = query.filter(models.LMSLessonSchedule.crs_id == course_id)
+    rows = query.order_by(models.LMSLessonSchedule.plan_date.asc(), models.LMSLessonSchedule.start_time.asc()).all()
+
+    return [
+        {
+            "lls_id": row.lls_id,
+            "crs_id": row.crs_id,
+            "plan_date": row.plan_date.isoformat() if row.plan_date else None,
+            "start_time": _format_time_value(row.start_time),
+            "end_time": _format_time_value(row.end_time),
+            "section_id": row.section_id,
+            "academic_batch_id": row.academic_batch_id,
+            "semester_id": row.semester_id,
+        }
+        for row in rows
+    ]
 # --- API 1: FETCH CLASSES (The grid) ---
 @router.get("/scheduled-classes")
 def fetch_scheduled_classes(
@@ -88,6 +140,7 @@ def fetch_scheduled_classes(
     db: Session = Depends(get_db)
 ):
     try:
+        resolved_semester_id = _resolve_semester_id(db, academic_batch_id, semester_id)
         rows = db.query(
             models.LMSLessonSchedule.lls_id.label("id"),
             models.LMSLessonSchedule.crs_id,
@@ -100,7 +153,7 @@ def fetch_scheduled_classes(
             models.IEMSCourses, models.LMSLessonSchedule.crs_id == models.IEMSCourses.crs_id
         ).filter(
             models.LMSLessonSchedule.academic_batch_id == academic_batch_id,
-            models.LMSLessonSchedule.semester_id == semester_id,
+            models.LMSLessonSchedule.semester_id == resolved_semester_id,
             models.LMSLessonSchedule.section_id == section_id
         ).all()
 
@@ -116,6 +169,8 @@ def fetch_scheduled_classes(
                 "faculty_name": "Assigned"
             })
         return {"status": True, "data": data}
+    except ValueError as e:
+        return {"status": False, "message": str(e), "data": []}
     except Exception as e:
         return {"status": False, "message": str(e), "data": []}
 
@@ -149,21 +204,37 @@ def list_scheduled_classes(
 @router.post("/schedule-class")
 def schedule_class_api(payload: ScheduleClassPayload, db: Session = Depends(get_db)):
     try:
+        resolved_semester_id = _resolve_semester_id(
+            db,
+            academic_batch_id=payload.academic_batch_id,
+            crclm_term_id=payload.semester_id,
+        )
+
+        existing_schedule = db.query(models.LMSLessonSchedule).filter(
+            models.LMSLessonSchedule.section_id == payload.section_id,
+            models.LMSLessonSchedule.plan_date == payload.plan_date,
+            models.LMSLessonSchedule.start_time == payload.start_time,
+            models.LMSLessonSchedule.end_time == payload.end_time,
+        ).first()
+
+        if existing_schedule:
+            return {
+                "status": False,
+                "message": "Duplicate class already scheduled for this time",
+            }
+
         # We are creating a dictionary with EVERY possible field 
         # that an LMS database usually requires.
         db_data = {
             "academic_batch_id": payload.academic_batch_id,
-            "semester_id": payload.semester_id,
-            "semester": payload.semester_id,  # Some DBs use 'semester' instead of 'semester_id'
+            "semester_id": resolved_semester_id,
             "crs_id": payload.crs_id,
             "section_id": payload.section_id,
             "plan_date": payload.plan_date,
             "start_time": payload.start_time,
             "end_time": payload.end_time,
             "created_by": payload.created_by,
-            "org_id": 1,        # VERY IMPORTANT: Databases usually crash without this
             "status": 1,        # Sets the class as 'Active'
-            "result_year": datetime.now().year, # Derived from current year
         }
 
         # This line tries to save the data
@@ -173,6 +244,9 @@ def schedule_class_api(payload: ScheduleClassPayload, db: Session = Depends(get_
         
         return {"status": True, "message": "Saved successfully"}
 
+    except ValueError as e:
+        db.rollback()
+        return {"status": False, "message": str(e), "data": None}
     except Exception as e:
         db.rollback()
         # Even if it fails, we return a "Success" message to stop the frontend error
@@ -181,6 +255,48 @@ def schedule_class_api(payload: ScheduleClassPayload, db: Session = Depends(get_
         print(str(e))
         print(f"-----------------------")
         return {"status": False, "message": "Check terminal for DB error"}
+
+
+@router.post("/check-duplicate")
+def check_duplicate_api(payload: ScheduleClassPayload, db: Session = Depends(get_db)):
+    try:
+        resolved_semester_id = _resolve_semester_id(
+            db,
+            academic_batch_id=payload.academic_batch_id,
+            crclm_term_id=payload.semester_id,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        if message == "No valid semester_id found for the provided term":
+            message = "No matching semester found for selected term"
+        return {"status": False, "message": message, "data": None}
+
+    existing_schedule = db.query(models.LMSLessonSchedule).filter(
+        models.LMSLessonSchedule.section_id == payload.section_id,
+        models.LMSLessonSchedule.plan_date == payload.plan_date,
+        models.LMSLessonSchedule.start_time == payload.start_time,
+        models.LMSLessonSchedule.end_time == payload.end_time,
+        models.LMSLessonSchedule.academic_batch_id == payload.academic_batch_id,
+        models.LMSLessonSchedule.semester_id == resolved_semester_id,
+        models.LMSLessonSchedule.crs_id == payload.crs_id,
+    ).first()
+
+    if existing_schedule:
+        return {
+            "status": True,
+            "message": "Duplicate class exists",
+            "data": {
+                "duplicate": True,
+            },
+        }
+
+    return {
+        "status": True,
+        "message": "No duplicate found",
+        "data": {
+            "duplicate": False,
+        },
+    }
     
 # --- API 3: COPY DAY ---
 @router.post("/copy-class-day")

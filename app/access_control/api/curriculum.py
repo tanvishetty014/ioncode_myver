@@ -92,5 +92,5 @@ def get_sections(crclm_id: int, crclm_term_id: int, db: Session = Depends(get_db
 
 # --- DO NOT CHANGE: YOUR PARTNER'S WORK ---
 router.add_api_route("/api/v1/comman_function/course-types", list_course_types, methods=["GET", "POST"])
-router.add_api_route("/api/v1/comman_function/courses", list_courses, methods=["GET", "POST"])
+router.add_api_route("/courses", list_courses, methods=["POST"])
 router.add_api_route("/api/v1/comman_function/batch-sections", list_batch_sections, methods=["GET", "POST"])
