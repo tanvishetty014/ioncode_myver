@@ -1,17 +1,18 @@
-from fastapi import FastAPI, Request, Depends, Query, HTTPException
+from fastapi import FastAPI, Request, Depends, Query, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import time
 
-# Internal imports from your project structure
+# Internal imports
 from .api.v1.routes import router as api_router
-from .db.models import Base  # Ensure your models like Department, Quiz, etc., are here
+from .db.models import Base  
 from .core.database import engine, SessionLocal 
 from sqlalchemy.orm import Session
+from sqlalchemy import text  
 from pydantic import BaseModel
 
-# --- NEW: Pydantic Schemas (Defining the data structure) ---
+# --- SCHEMAS ---
 class DropdownResponse(BaseModel):
     id: int
     name: str
@@ -30,14 +31,38 @@ class StudentMarkSchema(BaseModel):
     secured_marks: Optional[float]
     status: str
 
-class AttendanceStatusSchema(BaseModel):
-    status: str  # class not scheduled, attendance not taken, inprogress, finalized
-    date: date
-    course_id: int
+class CopyDayRequest(BaseModel):
+    tt_detail_id: int
+    source_date: str 
+    target_date: str
+    user_id: int
 
-app = FastAPI()
+class ResetTimetableRequest(BaseModel):
+    tt_detail_id: int
+    new_start_date: str
 
-# --- Database Dependency ---
+class UpdateRangeRequest(BaseModel):
+    tt_detail_id: int
+    new_end_date: str
+    user_id: int
+
+# --- APP INITIALIZATION ---
+app = FastAPI(title="IonCudos LMS API")
+
+# --- CORS MIDDLEWARE (FIXED: This solves the CORS Policy Error) ---
+origins = [
+    "http://localhost:3000", # React Frontend
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- DATABASE DEPENDENCY ---
 def get_db():
     db = SessionLocal()
     try:
@@ -45,7 +70,7 @@ def get_db():
     finally:
         db.close()
 
-# --- Existing Middleware ---
+# --- LOGGING MIDDLEWARE ---
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
@@ -54,6 +79,7 @@ async def log_requests(request: Request, call_next):
     print(f"REQUEST: {request.method} {request.url.path} - STATUS: {response.status_code} - TIME: {process_time:.2f}ms")
     return response
 
+<<<<<<< HEAD
 # Configuration for CORS
 app.add_middleware(
     CORSMiddleware,
@@ -79,89 +105,210 @@ app.include_router(api_router)
 #)
 
 # Include the main API router
+=======
+# --- ROUTER REGISTRATION (FIXED: This solves the 404 Not Found) ---
+# Note: Since your routers (like comman_function) already define "/api/v1",
+# we include them without a prefix here to prevent doubling up to "/api/v1/api/v1"
+# main.py
+# This adds the "/api/v1" part of the URL
+>>>>>>> 03403f79f48c202752b10687ff8d046867d9239d
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to IonCudos API", "status": "Online"}
 
-
 # =================================================================
-# NEW TASK APIS START HERE
+# HIERARCHY & QUIZ APIs (Keep as is)
 # =================================================================
-
-# 1. HIERARCHY APIs
 @app.get("/api/v1/hierarchy/programs", response_model=List[DropdownResponse])
 def get_programs(dept_id: int, db: Session = Depends(get_db)):
-    # Logic: return db.query(models.Program).filter(models.Program.dept_id == dept_id).all()
-    return [{"id": 1, "name": "B.E Computer Science"}]
+    # Real query to fetch programs based on the department selected
+    query = text("SELECT pg_id AS id, pg_name AS name FROM iems_program WHERE dept_id = :dept_id")
+    rows = db.execute(query, {"dept_id": dept_id}).mappings().all()
+    return rows
 
-@app.get("/api/v1/hierarchy/curriculum", response_model=List[DropdownResponse])
-def get_curriculum(dept_id: int, db: Session = Depends(get_db)):
-    return [{"id": 1, "name": "2023 Regulation"}]
+# Add this to your main.py
+@app.get("/api/v1/hierarchy/departments", response_model=List[DropdownResponse])
+def get_departments(db: Session = Depends(get_db)):
+    # This SQL query fetches real departments from your database
+    query = text("SELECT dept_id AS id, dept_name AS name FROM iems_department ORDER BY dept_name ASC")
+    rows = db.execute(query).mappings().all()
+    
+    # If the table is empty, it returns this dummy data so your UI doesn't break
+    if not rows:
+        return [{"id": 1, "name": "Computer Science"}, {"id": 2, "name": "Information Technology"}]
+        
+    return rows
 
 @app.get("/api/v1/hierarchy/terms", response_model=List[DropdownResponse])
 def get_terms(curriculum_id: int, db: Session = Depends(get_db)):
-    return [{"id": 4, "name": "Semester 4"}]
+    # Real query to fetch terms (semesters) based on the curriculum (academic batch)
+    query = text("""
+        SELECT semester_id AS id, semester AS name 
+        FROM iems_semester 
+        WHERE academic_batch_id = :curriculum_id 
+        ORDER BY semester_id ASC
+    """)
+    rows = db.execute(query, {"curriculum_id": curriculum_id}).mappings().all()
+    
+    # Fallback if no data is found so the dropdown doesn't look broken
+    if not rows:
+        return [{"id": 0, "name": "No Terms Found"}]
+        
+    return rows
+
+
+
+# @app.get("/api/v1/hierarchy/terms", response_model=List[DropdownResponse])
+# def get_terms(curriculum_id: int, db: Session = Depends(get_db)):
+#     return [{"id": 4, "name": "Semester 4"}]
 
 @app.get("/api/v1/hierarchy/sections", response_model=List[DropdownResponse])
 def get_sections(term_id: int, db: Session = Depends(get_db)):
-    return [{"id": 101, "name": "Section A"}]
+    # Real query to fetch sections based on the term (semester) selected
+    query = text("""
+        SELECT id AS id, section AS name 
+        FROM iems_section 
+        WHERE semester_id = :term_id 
+        ORDER BY section ASC
+    """)
+    rows = db.execute(query, {"term_id": term_id}).mappings().all()
+    
+    if not rows:
+        return [{"id": 0, "name": "No Sections Found"}]
+        
+    return rows
 
+# =================================================================
+# FIXED TIMETABLE LOGIC APIS (YOUR ASSIGNED TASKS)
+# =================================================================
 
-# 2. QUIZ APIs
-@app.get("/api/v1/quizzes/scheduled", response_model=List[QuizListSchema])
-def list_scheduled_quizzes(course_id: int, section_id: int, db: Session = Depends(get_db)):
-    # Logic: Filter Quiz table by course and section
-    return [{"quiz_id": 10, "title": "Mid-Term Python", "scheduled_date": datetime.now()}]
+# 1. API for Copy Class Day
+@app.post("/api/v1/timetable/copy-day")
+def copy_class_day(req: CopyDayRequest, db: Session = Depends(get_db)):
+    """Copies all classes from source_date to target_date."""
+    copy_script = text("""
+        INSERT INTO lms_tt_time_table_day_mapping 
+            (time_table_id, tt_detail_id, day_id, week_day_name, class_date, allot_crs_id, extra_class_flag, created_by)
+        SELECT 
+            time_table_id, tt_detail_id, day_id, week_day_name, :target, allot_crs_id, 2, :user
+        FROM lms_tt_time_table_day_mapping
+        WHERE class_date = :source AND tt_detail_id = :tt_id
+    """)
+    result = db.execute(copy_script, {"target": req.target_date, "source": req.source_date, "tt_id": req.tt_detail_id, "user": req.user_id})
+    db.commit()
+    
+    if result.rowcount == 0:
+        return {"message": "No classes found on source date to copy"}
+    return {"message": "Day copied successfully", "count": result.rowcount}
 
-@app.get("/api/v1/quizzes/results", response_model=List[StudentMarkSchema])
-def get_quiz_results(quiz_id: int, section_id: int, db: Session = Depends(get_db)):
-    # Logic: Join Student and Marks tables
-    return [
-        {"student_name": "Alice", "roll_no": "CS01", "secured_marks": 45.5, "status": "Submitted"},
-        {"student_name": "Bob", "roll_no": "CS02", "secured_marks": 0.0, "status": "Absent"}
-    ]
+# 2. API for Delete Timetable Day
+@app.delete("/api/v1/timetable/delete-day")
+def delete_timetable_day(tt_detail_id: int, class_date: str, db: Session = Depends(get_db)):
+    """Deletes class mappings for a single day."""
+    delete_script = text("""
+        DELETE FROM lms_tt_time_table_day_mapping 
+        WHERE tt_detail_id = :tt_id AND class_date = :c_date
+    """)
+    result = db.execute(delete_script, {"tt_id": tt_detail_id, "c_date": class_date})
+    db.commit()
+    return {"message": f"Timetable for {class_date} deleted", "deleted_count": result.rowcount}
 
+# 3. API for Reset Timetable Date (Shifting)
+from sqlalchemy import text
 
-# 3. CLASS SCHEDULE & ATTENDANCE STATUS APIs
-@app.get("/api/v1/classes/dates")
-def get_scheduled_dates(course_id: int, section_id: int, db: Session = Depends(get_db)):
-    """Fetch scheduled dates. Default today's date is returned as selected."""
-    today = date.today()
-    # Logic: fetch distinct dates from your ClassSchedule table
-    return {
-        "selected_date": today,
-        "available_dates": [today.isoformat(), "2024-05-20", "2024-05-22"]
-    }
+import traceback # Put this at the very top of the file
 
-@app.get("/api/v1/classes/status", response_model=AttendanceStatusSchema)
-def fetch_attendance_status(
-    course_id: int, 
-    section_id: int, 
-    scheduled_date: date = Query(default=date.today()), 
-    db: Session = Depends(get_db)
-):
-    """
-    Logic:
-    1. Check if class exists in Schedule Table -> If no: "class not scheduled"
-    2. Check if row exists in Attendance Table -> If no: "attendance not taken"
-    3. Check 'is_finalized' flag -> "inprogress" or "finalized"
-    """
-    # This is dummy logic - replace with your actual DB queries
-    class_exists = True 
-    attendance_exists = True
-    is_finalized = False
+@app.put("/api/v1/timetable/reset-date")
+def reset_timetable_date(req: ResetTimetableRequest, db: Session = Depends(get_db)):
+    print(f"DEBUG: Resetting Timetable ID {req.tt_detail_id} to {req.new_start_date}") # Check your terminal for this!
+    
+    try:
+        # 1. Check if the timetable exists
+        res = db.execute(
+            text("SELECT tt_start_date FROM lms_tt_time_table_details WHERE tt_detail_id = :id"), 
+            {"id": req.tt_detail_id}
+        ).fetchone()
+        
+        if not res: 
+            print("DEBUG: Timetable not found in DB")
+            return {"status": False, "message": "Timetable not found"}
+        
+        # 2. Convert dates
+        old_start_str = str(res[0])
+        try:
+            # Try standard format first
+            old_start = datetime.strptime(old_start_str, '%Y-%m-%d').date()
+        except:
+            # If DB is DD-MM-YYYY
+            old_start = datetime.strptime(old_start_str, '%d-%m-%Y').date()
 
-    if not class_exists:
-        current_status = "class not scheduled"
-    elif not attendance_exists:
-        current_status = "attendance not taken"
-    else:
-        current_status = "finalized" if is_finalized else "inprogress"
+        new_start = datetime.strptime(req.new_start_date, '%Y-%m-%d').date()
+        delta = (new_start - old_start).days
 
-    return {
-        "status": current_status,
-        "date": scheduled_date,
-        "course_id": course_id
-    }
+        # 3. UPDATE THE MAPPING
+        # We try both formats to be safe
+        db.execute(text("""
+            UPDATE lms_tt_time_table_day_mapping 
+            SET class_date = DATE_FORMAT(DATE_ADD(STR_TO_DATE(class_date, '%d-%m-%Y'), INTERVAL :days DAY), '%d-%m-%Y')
+            WHERE tt_detail_id = :tt_id
+        """), {"days": delta, "tt_id": req.tt_detail_id})
+
+        db.execute(text("""
+            UPDATE lms_tt_time_table_day_mapping 
+            SET class_date = DATE_ADD(class_date, INTERVAL :days DAY)
+            WHERE tt_detail_id = :tt_id AND class_date NOT LIKE '%-%-%'
+        """), {"days": delta, "tt_id": req.tt_detail_id})
+
+        # 4. UPDATE THE MAIN DETAILS TABLE
+        db.execute(
+            text("UPDATE lms_tt_time_table_details SET tt_start_date = :d WHERE tt_detail_id = :id"), 
+            {"d": req.new_start_date, "id": req.tt_detail_id}
+        )
+
+        db.commit()
+        print("DEBUG: Reset Successful")
+        return {"status": True, "message": "Timetable shifted successfully", "delta": delta}
+
+    except Exception as e:
+        db.rollback()
+        print("!!! ERROR DETECTED !!!")
+        print(traceback.format_exc()) # THIS WILL SHOW THE REAL ERROR IN TERMINAL
+        return {"status": False, "message": str(e)} # This will show the real error in React
+
+# 4. API for Update Range (Add/Delete based on range change)
+@app.put("/api/v1/timetable/update-range")
+def update_timetable_range(req: UpdateRangeRequest, db: Session = Depends(get_db)):
+    """If end_date is reduced, delete classes. If increased, add from template."""
+    res = db.execute(text("SELECT tt_end_date FROM lms_tt_time_table_details WHERE tt_detail_id = :id"), {"id": req.tt_detail_id}).fetchone()
+    if not res:
+        raise HTTPException(status_code=404, detail="Timetable record not found")
+
+    old_end = datetime.strptime(str(res[0]), '%Y-%m-%d').date()
+    new_end = datetime.strptime(req.new_end_date, '%Y-%m-%d').date()
+
+    if new_end < old_end:
+        # REDUCED: Delete classes outside new range
+        db.execute(text("DELETE FROM lms_tt_time_table_day_mapping WHERE tt_detail_id = :id AND class_date > :new_end"), 
+                   {"id": req.tt_detail_id, "new_end": req.new_end_date})
+    
+    elif new_end > old_end:
+        # INCREASED: Fill from weekly template
+        current_date = old_end + timedelta(days=1)
+        while current_date <= new_end:
+            target_day_id = current_date.weekday() + 1 
+            fill_script = text("""
+                INSERT INTO lms_tt_time_table_day_mapping 
+                (time_table_id, tt_detail_id, day_id, week_day_name, class_date, allot_crs_id, created_by)
+                SELECT time_table_id, tt_detail_id, day_id, week_day_name, :c_date, crs_id, :user
+                FROM lms_tt_time_table 
+                WHERE tt_detail_id = :tt_id AND day_id = :d_id
+            """)
+            db.execute(fill_script, {"c_date": current_date.strftime('%Y-%m-%d'), "user": req.user_id, "tt_id": req.tt_detail_id, "id": target_day_id})
+            current_date += timedelta(days=1)
+
+    db.execute(text("UPDATE lms_tt_time_table_details SET tt_end_date = :d WHERE tt_detail_id = :id"), 
+               {"d": req.new_end_date, "id": req.tt_detail_id})
+    db.commit()
+    return {"message": "Timetable range updated successfully"}

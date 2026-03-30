@@ -534,40 +534,75 @@ def get_quiz_list(
 # Fetches quiz details with mappings, questions, and share summary.
 @router.get("/{quiz_id}")
 def get_quiz_details(quiz_id: int, db: Session = Depends(get_db)):
-    quiz = db.execute(
-        text("SELECT * FROM lms_manage_quiz WHERE quiz_id = :quiz_id"),
-        {"quiz_id": quiz_id},
-    ).mappings().first()
-    if not quiz:
-        return returnException("Quiz not found")
+    try:
+        quiz = db.execute(
+            text("SELECT * FROM lms_manage_quiz WHERE quiz_id = :quiz_id"),
+            {"quiz_id": quiz_id},
+        ).mappings().first()
+        if not quiz:
+            return returnException("Quiz not found")
 
-    students = db.execute(
-        text("SELECT * FROM lms_quiz_student_mapping WHERE quiz_id = :quiz_id ORDER BY quiz_student_map_id ASC"),
-        {"quiz_id": quiz_id},
-    ).mappings().all()
+        try:
+            students = db.execute(
+                text("SELECT * FROM lms_quiz_student_mapping WHERE quiz_id = :quiz_id ORDER BY quiz_student_map_id ASC"),
+                {"quiz_id": quiz_id},
+            ).mappings().all()
+            students_list = [dict(row) for row in students]
+        except Exception:
+            db.rollback()
+            students_list = []
 
-    start_count = db.execute(
-        text("SELECT COUNT(*) FROM lms_quiz_start_log WHERE quiz_id = :quiz_id"),
-        {"quiz_id": quiz_id},
-    ).scalar() or 0
+        try:
+            start_count = db.execute(
+                text("SELECT COUNT(*) FROM lms_quiz_start_log WHERE quiz_id = :quiz_id"),
+                {"quiz_id": quiz_id},
+            ).scalar() or 0
+        except Exception:
+            db.rollback()
+            start_count = 0
 
-    answers_count = db.execute(
-        text("SELECT COUNT(*) FROM lms_quiz_student_answer WHERE quiz_id = :quiz_id"),
-        {"quiz_id": quiz_id},
-    ).scalar() or 0
+        try:
+            answers_count = db.execute(
+                text("SELECT COUNT(*) FROM lms_quiz_student_answer WHERE quiz_id = :quiz_id"),
+                {"quiz_id": quiz_id},
+            ).scalar() or 0
+        except Exception:
+            db.rollback()
+            answers_count = 0
 
-    return returnSuccess(
-        {
-            "quiz": dict(quiz),
-            "section_ids": _fetch_quiz_section_ids(db, quiz_id),
-            "topic_ids": _fetch_quiz_topic_ids(db, quiz_id),
-            "questions": _fetch_quiz_questions(db, quiz_id),
-            "students": [dict(row) for row in students],
-            "started_count": int(start_count),
-            "answers_count": int(answers_count),
-            "is_edit_blocked": bool(start_count),
-        }
-    )
+        try:
+            questions = _fetch_quiz_questions(db, quiz_id)
+        except Exception:
+            db.rollback()
+            questions = []
+
+        try:
+            section_ids = _fetch_quiz_section_ids(db, quiz_id)
+        except Exception:
+            db.rollback()
+            section_ids = []
+
+        try:
+            topic_ids = _fetch_quiz_topic_ids(db, quiz_id)
+        except Exception:
+            db.rollback()
+            topic_ids = []
+
+        return returnSuccess(
+            {
+                "quiz": dict(quiz),
+                "section_ids": section_ids,
+                "topic_ids": topic_ids,
+                "questions": questions,
+                "students": students_list,
+                "started_count": int(start_count),
+                "answers_count": int(answers_count),
+                "is_edit_blocked": bool(start_count),
+            }
+        )
+    except Exception as exc:
+        db.rollback()
+        return returnException(f"Failed to fetch quiz details: {str(exc)}")
 
 
 # Updates quiz details and replaces its section and topic mappings.

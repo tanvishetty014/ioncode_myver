@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from datetime import date
 from sqlalchemy import and_, or_, asc, distinct, func, text, update
 from sqlalchemy.orm import Session
+from typing import List, Optional
 from datetime import datetime, date, time, timedelta
 
 from app.utils.set_password_helper import set_private_password, validate_old_password
@@ -41,7 +42,8 @@ from .....utils.auth_helper import get_current_user
 from .....utils.http_return_helper import returnSuccess, returnException
 from .....core.database import get_db, get_db_pool
 
-router = APIRouter(tags=["Comman Function"])
+# This prefix tells FastAPI the URL is /api/v1/comman_function/...
+router = APIRouter(tags=["Comman Function"]) # NO prefix here
 
 
 def _api_success(data=None, message: str = "Data fetched successfully", status_code: int = status.HTTP_200_OK):
@@ -66,13 +68,21 @@ def _api_error(message: str = "Invalid input", error: str = "Error details", sta
     )
 
 
+<<<<<<< HEAD
 class ScheduleClassRequest(BaseModel):
     academic_batch_id: int
+=======
+# --- ADD THESE FOR YOUR TASK ---
+class ScheduleClassPayload(BaseModel):
+    academic_batch_id: int
+    semester_id: int
+>>>>>>> 03403f79f48c202752b10687ff8d046867d9239d
     crs_id: int
     section_id: int
     plan_date: date
     start_time: str
     end_time: str
+<<<<<<< HEAD
     created_by: int
 
 from sqlalchemy import text
@@ -211,6 +221,19 @@ def schedule_class(request: ScheduleClassRequest, db: Session = Depends(get_db))
         raise
 
 
+=======
+    created_by: int = 1
+
+class ResetDatePayload(BaseModel):
+    academic_batch_id: int
+    semester_id: int
+    section_id: int
+    new_start_date: date
+    new_end_date: date
+
+
+
+>>>>>>> 03403f79f48c202752b10687ff8d046867d9239d
 @router.post("/fetch_result_year")
 def fetch_result_year(
         request_data: ResultYearRequest, current_user: str = Depends(get_current_user), org_id: int = Header(...),
@@ -3455,6 +3478,7 @@ def export_timetable_pdf(
         filename="timetable.pdf"
     )
 
+<<<<<<< HEAD
 class BatchRequest(BaseModel):
     academic_batch_id: int
 
@@ -3547,3 +3571,122 @@ def simple_schedule_class(request: ScheduleRequest, db: Session = Depends(get_db
             "status": False,
             "message": str(e)
         }
+=======
+# ----------------------------------------------------------------
+# NEW TIMETABLE APIs (Your assigned tasks)
+# ----------------------------------------------------------------
+
+# 1. GET Scheduled Classes (Fixes 404 & Map error)
+# @router.get("/scheduled-classes")
+# def fetch_scheduled_classes_api(
+#     academic_batch_id: int, 
+#     semester_id: int, 
+#     section_id: int, 
+#     db: Session = Depends(get_db)
+# ):
+#     try:
+#         rows = db.query(
+#             LMSLessonSchedule.lls_id,
+#             LMSLessonSchedule.crs_id,
+#             LMSLessonSchedule.plan_date,
+#             LMSLessonSchedule.start_time,
+#             LMSLessonSchedule.end_time,
+#             IEMSCourses.crs_title,
+#             IEMSCourses.crs_code
+#         ).outerjoin(
+#             IEMSCourses, LMSLessonSchedule.crs_id == IEMSCourses.crs_id
+#         ).filter(
+#             LMSLessonSchedule.academic_batch_id == academic_batch_id,
+#             LMSLessonSchedule.semester_id == semester_id,
+#             LMSLessonSchedule.section_id == section_id
+#         ).all()
+
+#         data = []
+#         for row in rows:
+#             data.append({
+#                 "id": row.lls_id,
+#                 "crs_id": row.crs_id,
+#                 "plan_date": row.plan_date.isoformat() if row.plan_date else None,
+#                 "start_time": str(row.start_time),
+#                 "end_time": str(row.end_time),
+#                 "course": f"{row.crs_code} - {row.crs_title}" if row.crs_code else "Unknown",
+#                 "faculty_name": "Not Assigned"
+#             })
+        
+#         # Return inside a "data" key so frontend data.map() works
+#         return {"status": True, "data": data}
+#     except Exception as e:
+#         return {"status": False, "message": str(e), "data": []}
+
+# # 2. POST Schedule Class (Fixes 404 & 500)
+# @router.post("/schedule-class")
+# def schedule_class_api(payload: ScheduleClassPayload, db: Session = Depends(get_db)):
+#     try:
+#         new_class = LMSLessonSchedule(
+#             academic_batch_id=payload.academic_batch_id,
+#             semester_id=payload.semester_id,
+#             crs_id=payload.crs_id,
+#             section_id=payload.section_id,
+#             plan_date=payload.plan_date,
+#             start_time=payload.start_time,
+#             end_time=payload.end_time,
+#             created_by=payload.created_by,
+#             status=1
+#         )
+#         db.add(new_class)
+#         db.commit()
+#         return {"status": True, "message": "Class scheduled successfully"}
+#     except Exception as e:
+#         db.rollback()
+#         raise HTTPException(status_code=500, detail=str(e))
+
+# # 3. TASK: Copy Class Day
+# @router.post("/copy-class-day")
+# def copy_class_day_api(from_date: date, to_date: date, section_id: int, db: Session = Depends(get_db)):
+#     source_classes = db.query(LMSLessonSchedule).filter(
+#         LMSLessonSchedule.plan_date == from_date,
+#         LMSLessonSchedule.section_id == section_id
+#     ).all()
+    
+#     if not source_classes:
+#         raise HTTPException(status_code=404, detail="No classes found to copy.")
+
+#     for cls in source_classes:
+#         db.add(LMSLessonSchedule(
+#             academic_batch_id=cls.academic_batch_id,
+#             semester_id=cls.semester_id,
+#             crs_id=cls.crs_id,
+#             section_id=cls.section_id,
+#             plan_date=to_date,
+#             start_time=cls.start_time,
+#             end_time=cls.end_time,
+#             created_by=cls.created_by,
+#             status=1
+#         ))
+#     db.commit()
+#     return {"status": True, "message": "Day copied successfully"}
+
+# # 4. TASK: Delete Timetable
+# @router.delete("/delete-timetable")
+# def delete_timetable_api(batch_id: int, sem_id: int, section_id: int, db: Session = Depends(get_db)):
+#     db.query(LMSLessonSchedule).filter(
+#         LMSLessonSchedule.academic_batch_id == batch_id,
+#         LMSLessonSchedule.semester_id == sem_id,
+#         LMSLessonSchedule.section_id == section_id
+#     ).delete()
+#     db.commit()
+#     return {"status": True, "message": "Timetable deleted successfully"}
+
+# # 5. TASK: Reset Timetable Date (Handles adding/deleting based on range)
+# @router.post("/reset-timetable-date")
+# def reset_timetable_date_api(payload: ResetDatePayload, db: Session = Depends(get_db)):
+#     # Deletes any classes that now fall outside the new range (Reduced range logic)
+#     deleted = db.query(LMSLessonSchedule).filter(
+#         LMSLessonSchedule.section_id == payload.section_id,
+#         (LMSLessonSchedule.plan_date < payload.new_start_date) | 
+#         (LMSLessonSchedule.plan_date > payload.new_end_date)
+#     ).delete()
+    
+#     db.commit()
+#     return {"status": True, "message": f"Reset successful. {deleted} classes removed."}
+>>>>>>> 03403f79f48c202752b10687ff8d046867d9239d

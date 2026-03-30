@@ -1,29 +1,58 @@
-
 print("✅ V1 ROUTES LOADED")
 from fastapi import APIRouter
+
+# --- 1. IMPORT ALL ROUTERS ---
 from ...api.auth import login
 from app.api.v1.topic_management import topic_routes
-from ...api.v1.ems_module.configurations.department import department
-from ...api.v1.ems_module.comman_functions import comman_function
 from app.api.v1.material.material_routes import router as material_router
 from app.api.v1.student_assignment.student_assignment_routes import router as student_assignment_router
-
-router = APIRouter()
-router.include_router(student_assignment_router)
-router.include_router(material_router)
-router = APIRouter(tags=["Student Assignment"])
-
 from .announcement import router as announcement_router
 from .manage_assignment import router as manage_assignment_router
 from .manage_quiz import router as manage_quiz_router
+from .export_timetable import router as export_timetable_router
+from .schedule_class import router as schedule_class_router
 from .student_record_report import router as student_record_report_router
 from .attendance_status_report import router as attendance_status_report_router
+
+# Access Control / Timetable / Attendance Routers
 from app.access_control.api.curriculum import router as curriculum_router
 from app.access_control.api.timetable import router as timetable_router
 from app.access_control.api.attendance import router as attendance_router
 from app.access_control.api.scheduled_classes import router as scheduled_classes_router
 
+# EMS Utility Router
+from ...api.v1.ems_module.comman_functions import comman_function as ems_utility_router
 
+# --- 2. INITIALIZE MAIN ROUTER (MUST BE BEFORE INCLUDES) ---
+router = APIRouter()
+
+# --- 3. INCLUDE ROUTERS ---
+
+# Login/Auth
+router.include_router(login.router, tags=["Auth"])
+
+# Core Features
+router.include_router(student_assignment_router, prefix="/student_assignment", tags=["Student Assignment"])
+router.include_router(material_router, prefix="/material", tags=["Material"])
+router.include_router(announcement_router, prefix="/announcements", tags=["Announcements"])
+router.include_router(manage_assignment_router, prefix="/manage-assignment", tags=["Manage Assignment"])
+router.include_router(manage_quiz_router, prefix="/manage-quiz", tags=["Manage Quiz"])
+router.include_router(topic_routes.router, tags=["Topic Management"])
+
+# Reports (Including Attendance Status Reports)
+router.include_router(student_record_report_router, prefix="/reports", tags=["Reports"])
+router.include_router(attendance_status_report_router, prefix="/reports", tags=["Attendance Reports"])
+
+# Timetable, Curriculum & Attendance Marking
+# FIX: Including these once without prefixes prevents the 405 error
+router.include_router(curriculum_router, tags=["Curriculum"])
+router.include_router(attendance_router, tags=["Attendance Marking"])
+router.include_router(timetable_router, tags=["Timetable"])
+
+
+# THE FIX: ALL "comman_function" endpoints grouped under one prefix
+router.include_router(ems_utility_router.router, prefix="/comman_function", tags=["Common Functions"])
+router.include_router(scheduled_classes_router, prefix="/comman_function", tags=["Scheduled Classes"])
 # from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
 #     router as curriculum_delivery_router
 # )
@@ -438,6 +467,16 @@ router.include_router(
     tags=["Manage Quiz"]
 )
 router.include_router(
+    export_timetable_router,
+    prefix="/export-timetable",
+    tags=["Export Timetable"]
+)
+router.include_router(
+    schedule_class_router,
+    prefix="/schedule-class",
+    tags=["Schedule Class"]
+)
+router.include_router(
     student_record_report_router,
     prefix="/reports",
     tags=["Reports - Student Record"]
@@ -446,6 +485,11 @@ router.include_router(
     attendance_status_report_router,
     prefix="/reports",
     tags=["Attendance Status Report"]
+)
+router.include_router(
+    attendance_router,
+    prefix="/access-control",
+    tags=["Attendance"]
 )
 # router.include_router(
 #     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
@@ -540,11 +584,13 @@ router.include_router(login.router)
 
 # Include routes for comman function  module
 router.include_router(comman_function.router, prefix="/comman_function")
+# router.include_router(curriculum_router, prefix="/comman_function")
+
 
 router.include_router(curriculum_router)
-router.include_router(timetable_router)
-router.include_router(attendance_router)
 router.include_router(scheduled_classes_router)
+router.include_router(attendance_router)
+router.include_router(timetable_router)
 
 # Include routes for configuration module
 # router.include_router(all_master.router, prefix="/all_master", tags=["auth"])

@@ -28,11 +28,10 @@ from app.access_control.api.timetable import router as timetable
 from app.access_control.api.scheduled_classes import router as scheduled_classes
 from app.access_control.api.attendance import router as attendance
 
-# from app.access_control.middleware.auth_middleware import authorize
+# --- ADD THIS IMPORT ---
+from app.access_control.api.comman_function import router as comman_function_router 
 
-router = APIRouter(
-    # dependencies=[Depends(authorize)]
-)
+router = APIRouter()
 
 router.include_router(auth_router, prefix="/api/v1")
 router.include_router(modules)
@@ -55,3 +54,6 @@ router.include_router(curriculum)
 router.include_router(timetable)
 router.include_router(scheduled_classes)
 router.include_router(attendance)
+
+# --- ADD THIS LINE ---
+router.include_router(comman_function_router)
