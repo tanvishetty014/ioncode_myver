@@ -33,6 +33,10 @@ class ResetDatePayload(BaseModel):
     new_end_date: date
 
 # Helpers
+def _success_response(data):
+    """Helper function to format successful API responses"""
+    return {"status": True, "data": data}
+
 def _format_time_value(value):
     if value is None: return None
     if isinstance(value, timedelta):
