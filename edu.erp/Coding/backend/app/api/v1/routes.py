@@ -1,5 +1,61 @@
+print("✅ V1 ROUTES LOADED")
 from fastapi import APIRouter
+
+# --- 1. IMPORT ALL ROUTERS ---
 from ...api.auth import login
+from app.api.v1.topic_management import topic_routes
+from app.api.v1.material.material_routes import router as material_router
+from app.api.v1.student_assignment.student_assignment_routes import router as student_assignment_router
+from .announcement import router as announcement_router
+from .manage_assignment import router as manage_assignment_router
+from .manage_quiz import router as manage_quiz_router
+from .export_timetable import router as export_timetable_router
+from .schedule_class import router as schedule_class_router
+from .student_record_report import router as student_record_report_router
+from .attendance_status_report import router as attendance_status_report_router
+
+# Access Control / Timetable / Attendance Routers
+from app.access_control.api.curriculum import router as curriculum_router
+from app.access_control.api.timetable import router as timetable_router
+from app.access_control.api.attendance import router as attendance_router
+from app.access_control.api.scheduled_classes import router as scheduled_classes_router
+
+# EMS Utility Router
+from ...api.v1.ems_module.comman_functions import comman_function as ems_utility_router
+
+# --- 2. INITIALIZE MAIN ROUTER (MUST BE BEFORE INCLUDES) ---
+router = APIRouter()
+
+# --- 3. INCLUDE ROUTERS ---
+
+# Login/Auth
+router.include_router(login.router, tags=["Auth"])
+
+# Core Features
+router.include_router(student_assignment_router, prefix="/student_assignment", tags=["Student Assignment"])
+router.include_router(material_router, prefix="/material", tags=["Material"])
+router.include_router(announcement_router, prefix="/announcements", tags=["Announcements"])
+router.include_router(manage_assignment_router, prefix="/manage-assignment", tags=["Manage Assignment"])
+router.include_router(manage_quiz_router, prefix="/manage-quiz", tags=["Manage Quiz"])
+router.include_router(topic_routes.router, tags=["Topic Management"])
+
+# Reports (Including Attendance Status Reports)
+router.include_router(student_record_report_router, prefix="/reports", tags=["Reports"])
+router.include_router(attendance_status_report_router, prefix="/reports", tags=["Attendance Reports"])
+
+# Timetable, Curriculum & Attendance Marking
+# FIX: Including these once without prefixes prevents the 405 error
+router.include_router(curriculum_router, tags=["Curriculum"])
+router.include_router(attendance_router, tags=["Attendance Marking"])
+router.include_router(timetable_router, tags=["Timetable"])
+
+
+# THE FIX: ALL "comman_function" endpoints grouped under one prefix
+router.include_router(ems_utility_router.router, prefix="/comman_function", tags=["Common Functions"])
+router.include_router(scheduled_classes_router, prefix="/comman_function", tags=["Scheduled Classes"])
+# from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
+#     router as curriculum_delivery_router
+# )
 #from app.api.v1.cudo_module.curriculum.delivery_method.curriculum_delivery_method import (
 #    router as curriculum_delivery_router
 #)
@@ -339,6 +395,119 @@ from ...api.v1.ems_module.comman_functions import comman_function
 
 ## cudo_module imports commented out because module is missing
 #board of studies members
+# from app.api.v1.cudo_module.board_of_studies.api.bos_member_api import (
+#     router as bos_member_router
+# )
+
+# from app.api.v1.cudo_module.users.api.user_api import (
+#     router as user_router
+# )
+
+# from app.api.v1.cudo_module.bloom_domain.api.bloom_domain_api import (
+#     router as bloom_domain_router
+# )
+# from app.api.v1.cudo_module.delivery_method.api.delivery_method_api import (
+#     router as delivery_method_router
+# )
+# from app.api.v1.cudo_module.program_mode.api.program_mode_api import (
+#     router as program_mode_router
+# )
+
+# # Main API router
+# from app.api.v1.cudo_module.map_level_weightage.map_level_weightage import (
+#     router as map_level_weightage_router
+# )
+
+# # Program Outcome router
+# from app.api.v1.cudo_module.program_outcome.api.po_type_api import (
+#     router as program_outcome_router
+# )
+
+# from app.api.v1.cudo_module.generic_program_outcome.generic_po_api import (
+#     router as generic_program_outcome_router
+# )
+
+# from app.api.v1.cudo_module.lab_category.lab_category_api import (
+#     router as lab_category_router
+# )
+
+
+# from app.api.v1.cudo_module.manage_knowledge_and_attitude_profile.api import (
+#     router as manage_knowledge_and_attitude_profile_router
+# )
+
+
+router = APIRouter()
+
+
+# router.include_router(
+#     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
+# )
+# router.include_router(
+#     curriculum_delivery_router,
+#     prefix="/curriculum/curriculum_delivery_method",
+#     tags=["Curriculum Delivery Method"]
+# )
+
+
+
+router.include_router(
+    announcement_router,
+    prefix="/announcements",
+    tags=["Announcements"]
+)
+router.include_router(
+    manage_assignment_router,
+    prefix="/manage-assignment",
+    tags=["Manage Assignment"]
+)
+router.include_router(
+    manage_quiz_router,
+    prefix="/manage-quiz",
+    tags=["Manage Quiz"]
+)
+router.include_router(
+    export_timetable_router,
+    prefix="/export-timetable",
+    tags=["Export Timetable"]
+)
+router.include_router(
+    schedule_class_router,
+    prefix="/schedule-class",
+    tags=["Schedule Class"]
+)
+router.include_router(
+    student_record_report_router,
+    prefix="/reports",
+    tags=["Reports - Student Record"]
+)
+router.include_router(
+    attendance_status_report_router,
+    prefix="/reports",
+    tags=["Attendance Status Report"]
+)
+router.include_router(
+    attendance_router,
+    prefix="/access-control",
+    tags=["Attendance"]
+)
+# router.include_router(
+#     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
+# )
+# router.include_router(
+#     curriculum_delivery_router,
+#     prefix="/curriculum/curriculum_delivery_method",
+#     tags=["Curriculum Delivery Method"]
+# )
+
+
+# router.include_router(
+#     user_router, prefix="/user", tags=["User"]
+# )
+
+# router.include_router(
+#     manage_knowledge_and_attitude_profile_router, prefix="/manage_knowledge_and_attitude_profile", tags=["Manage Knowledge and Attitude Profile"]
+# )
 #from app.api.v1.cudo_module.board_of_studies.api.bos_member_api import (
 #    router as bos_member_router
 #)
@@ -403,19 +572,25 @@ router.include_router = router.include_router  # placeholder to keep linter happ
 
 ## Below include all modules routes
 
-# Include auth routes
-# router.include_router(login.router, prefix="/auth", tags=["auth"])
-# router.include_router(register.router, prefix="/auth", tags=["auth"])
-# router.include_router(refresh_token.router, prefix="/auth", tags=["auth"])
 
-# Include routes for registartion module
-router.include_router(login.router, prefix="/staff_student_login", tags=["auth"])
+
+# Include auth routes
+router.include_router(login.router)
+# router.include_router(register.router, prefix="/auth", tags=["auth"])
+#router.include_router(refresh_token.router, prefix="/auth", tags=["auth"])
 
 # Include routes for dashboard module
 # router.include_router(dashboard_info.router, prefix="/dashboard_info_route", tags=["auth"])
 
 # Include routes for comman function  module
-router.include_router(comman_function.router, prefix="/comman_function", tags=["auth"])
+router.include_router(comman_function.router, prefix="/comman_function")
+# router.include_router(curriculum_router, prefix="/comman_function")
+
+
+router.include_router(curriculum_router)
+router.include_router(scheduled_classes_router)
+router.include_router(attendance_router)
+router.include_router(timetable_router)
 
 # Include routes for configuration module
 # router.include_router(all_master.router, prefix="/all_master", tags=["auth"])
@@ -424,6 +599,20 @@ router.include_router(comman_function.router, prefix="/comman_function", tags=["
 # router.include_router(user_access.router, prefix="/user_acccess", tags=["auth"])
 # router.include_router(staff_course_allocation.router, prefix="/user_courses", tags=["auth"])
 router.include_router(department.router, prefix="/department", tags=["auth"])
+router.include_router(
+    topic_routes.router
+)
+
+router.include_router(
+     material_router,
+     prefix="/material",
+     tags=["Material"]
+)
+router.include_router(
+    student_assignment_router,
+    prefix="/student_assignment"
+)
+#student assignment routes
 # router.include_router(program.router, prefix="/program", tags=["auth"])
 # router.include_router(program_type.router, prefix="/program_type", tags=["auth"])
 
@@ -521,8 +710,6 @@ router.include_router(department.router, prefix="/department", tags=["auth"])
 # router.include_router(vehicle_schedule.router, prefix="/transport", tags=['transport'])
 
 
-router.include_router(login.router, prefix="/staff_student_login", tags=["Login"])
-
 # Include routes for dashboard module
 # router.include_router(
 #     dashboard_info.router, prefix="/dashboard_info_route", tags=["EMS-dashboard"]
@@ -533,6 +720,13 @@ router.include_router(login.router, prefix="/staff_student_login", tags=["Login"
 #     comman_function.router, prefix="/comman_function", tags=["EMS-comman_function"]
 # )
 
+# router.include_router(
+#     bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
+# )
+
+# router.include_router(
+#     program_mode_router, prefix="/program_mode", tags=["Program Mode"]
+# )
 ## cudo_module includes commented out
 #router.include_router(
 #    bloom_domain_router, prefix="/bloom_domain", tags=["Bloom Domain"]
@@ -558,9 +752,6 @@ router.include_router(login.router, prefix="/staff_student_login", tags=["Login"
 # router.include_router(
 #     staff_course_allocation.router, prefix="/user_courses", tags=["EMS-configuration"]
 # )
-router.include_router(
-    department.router, prefix="/department", tags=["EMS-configuration"]
-)
 # router.include_router(program.router, prefix="/program", tags=["EMS-configuration"])
 # router.include_router(
 #     program_type.router, prefix="/program_type", tags=["EMS-configuration"]
@@ -923,6 +1114,59 @@ router.include_router(
 # router.include_router(student_route.static_router)
 
 # include BOARD OF STUDIES (BoS)
+# router.include_router(
+#     bos_member_router,
+#     prefix="/cudos/board-of-studies",
+#     tags=["Board Of Studies"]
+# )
+
+# include DELIVERY METHOD
+# # include DELIVERY METHOD
+# router.include_router(
+#     delivery_method_router,
+#     prefix="/cudos/delivery-method",
+#     tags=["Delivery Method"]
+# )
+
+# #include MAP LEVEL WEIGHTAGE
+# router.include_router(
+#     map_level_weightage_router,
+#     prefix="/cudos/map-level-weightage",
+#     tags=["Map Level Weightage"]
+# )
+
+
+#  include PROGRAM OUTCOME 
+# router.include_router(
+#     program_outcome_router,
+#     prefix="/program_outcome",
+#     tags=["Program Outcome"]
+# )
+
+
+# from app.api.v1.cudo_module.knowledge_profile.api.okp_api import router as okp_router
+
+# router.include_router(
+#     okp_router,
+#     prefix="/knowledge-profile",
+#     tags=["Knowledge Profile"]
+# )
+
+
+# include GENERIC PROGRAM OUTCOME
+# router.include_router(
+#     generic_program_outcome_router,
+#     prefix="/cudos/generic-program-outcome",
+#     tags=["Generic Program Outcome"]
+# )
+
+# include LAB CATEGORY
+# # include LAB CATEGORY
+# router.include_router(
+#     lab_category_router,
+#     prefix="/cudos/lab-category",
+#     tags=["Lab Category"]
+# )
 ## cudo_module related includes and imports commented out because module is missing
 #router.include_router(
 #    bos_member_router,

@@ -4,9 +4,37 @@ from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from sqlalchemy.sql import func
 import enum
+from ..core.database import Base
+
 
 Base = declarative_base()
 
+# ============================================================
+# CUDOS TOPIC MODEL
+# Table: cudos_topic
+# Purpose: Master table for storing topic information
+# Used in: Topic management APIs for CRUD operations
+# ============================================================
+class CudosTopic(Base):
+    __tablename__ = "cudos_topic"
+
+    topic_id = Column(Integer, primary_key=True, index=True)
+    topic_code = Column(String(10))
+    topic_title = Column(String(500))
+    topic_content = Column(Text)
+    topic_hrs = Column(String(8))
+    num_of_sessions = Column(Float)
+    marks_expt = Column(Float)
+    correlation_with_theory = Column(String(200))
+    conduction_date = Column(Date)
+    actual_delivery_date = Column(Date)
+    academic_batch_id = Column(Integer)
+    semester_id = Column(Integer)
+    course_id = Column(Integer)
+    created_by = Column(Integer)
+    modified_by = Column(Integer)
+    created_date = Column(Date)
+    modified_date = Column(Date)
 
 class Caste(Base):
     __tablename__ = 'caste'
@@ -2308,9 +2336,13 @@ class IEMRoleMenus(Base):
 class IEMSection(Base):
     __tablename__ = 'iems_section'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    section = Column(String(10), nullable=False)
-
+    id = Column(Integer, primary_key=True, index=True)
+    section = Column(String(10))
+    dept_id = Column(Integer)
+    pgm_id = Column(Integer)
+    academic_batch_id = Column(Integer)
+    semester_id = Column(Integer)
+    status = Column(Integer)
 
 class IEMSemester(Base):
     __tablename__ = 'iems_semester'
@@ -2912,6 +2944,12 @@ class IEMSUserPermissions(Base):
 class IEMSUserRoles(Base):
     __tablename__ = 'iems_user_roles'
 
+    user_role_map_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("iems_users.id"), nullable=False)
+    user_role_id = Column(Integer, ForeignKey("iems_user_role_master.user_role_id"), nullable=False)
+    org_id = Column(Integer, ForeignKey("iems_organisation.org_id"), default=1, nullable=False)
+
+    role = relationship("IEMSUserRoleMaster", foreign_keys=[user_role_id])
     # Map Python attribute `userrole_id` to database column `user_role_id`
     userrole_id = Column("user_role_id", Integer, primary_key=True, nullable=False)
     user_id = Column(Integer, nullable=False)
@@ -2923,8 +2961,10 @@ class IEMSUserRoleMaster(Base):
     __tablename__ = 'iems_user_role_master'
 
     user_role_id = Column(Integer, primary_key=True, nullable=False)
-    user_role = Column(String(45), nullable=False)
-    user_role_description = Column(String(225), nullable=False)
+    # user_role = Column(String(45), nullable=False)
+    role_name = Column(String(200), nullable=False)
+    # user_role_description = Column(String(225), nullable=False)
+    description = Column(Text, nullable=False)
     status = Column(SmallInteger, default=1, nullable=False)
     department_wise = Column(SmallInteger, default=0, nullable=False)
     core_role = Column(Boolean, default=False, nullable=False)
@@ -4011,3 +4051,166 @@ class StudentPayment(Base):
 
     # Relationship with StudentRoomAllotment
     room_allotment = relationship("StudentRoomAllotment", backref="student_payment")
+
+
+# Bloom Domain Model (placeholder for missing module)
+class BloomDomain(Base):
+    __tablename__ = 'bloom_domain'
+
+    bloom_domain_id = Column(Integer, primary_key=True, autoincrement=True)
+    bloom_domain_name = Column(String(100), nullable=True)
+    bloom_domain_acronym = Column(String(50), nullable=True)
+    bloom_domain_description = Column(String(255), nullable=True)
+    status = Column(Integer, default=1)
+    org_id = Column(Integer, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    create_date = Column(DateTime, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    modify_date = Column(DateTime, nullable=True)
+
+
+class LMSMapInstructorTopic(Base):
+    __tablename__ = 'lms_map_instructor_topic'
+
+    inst_map_id = Column(Integer, primary_key=True, autoincrement=True)
+    academic_batch_id = Column(Integer, nullable=False)
+    semester_id = Column(Integer, nullable=False)
+    crs_id = Column(Integer, nullable=False)
+    section_id = Column(Integer, nullable=False)
+    topic_id = Column(Integer, nullable=False)
+    instructor_id = Column(Integer, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# Topic Lesson Schedule Model
+class TopicLessonSchedule(Base):
+    __tablename__ = 'topic_lesson_schedule'
+
+    lesson_schedule_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic_id = Column(Integer, nullable=False)
+    conduction_date = Column(Date, nullable=True)
+    actual_delivery_date = Column(Date, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+
+# LMS Map Portion LS Model
+class LMSMapPortionLS(Base):
+    __tablename__ = 'lms_map_portion_ls'
+
+    portion_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic_id = Column(Integer, nullable=False)
+    section_id = Column(Integer, nullable=True)
+    lesson_schedule_id = Column(Integer, nullable=True)
+    portion_ref = Column(String(500), nullable=True)
+    marks_expt = Column(Float, nullable=True)
+    planned_date = Column(Date, nullable=True)
+    delivery_date = Column(Date, nullable=True)
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
+    status = Column(Integer, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
+class CudosMapCourseToCourseInstructor(Base):
+    __tablename__ = "cudos_map_courseto_course_instructor"
+
+    mcci_id = Column(Integer, primary_key=True)
+    academic_batch_id = Column(Integer)
+    crclm_term_id = Column(Integer)
+    crs_id = Column(Integer)
+    course_instructor_id = Column(Integer)   
+    section_id = Column(Integer)
+
+
+class LMSCourseMaterialUpload(Base):
+    __tablename__ = "lms_crs_material_upload"
+
+    mat_id = Column(Integer, primary_key=True, index=True)
+    document_name = Column(String(1000))
+    file_name = Column(String(1000))
+    docment_url = Column(Text)
+    description = Column(Text)
+    academic_batch_id = Column(Integer)
+    semester_id = Column(Integer)
+    crs_id = Column(Integer)
+    section_ids = Column(String(1000))
+    topic_ids = Column(String(1000))
+    created_by = Column(Integer)
+    update_cnt = Column(Integer,default=0)
+
+class LMSMapShareMaterialsToStudent(Base):
+    __tablename__ = "lms_map_share_materials_to_student"
+
+    material_student_map_id = Column(Integer, primary_key=True, autoincrement=True)
+    ssd_id = Column(Integer)
+    mat_id = Column(Integer)
+    academic_batch_id = Column(Integer)
+    section_id = Column(Integer)
+    student_usn = Column(String(20))
+
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy import Date, Time
+
+class Announcement(Base):
+    __tablename__ = "lms_notifications"
+
+    lmsn_id = Column(Integer, primary_key=True, index=True)
+    delivery_date = Column(Date)
+    delivery_time = Column(Time)
+    delivery_hide_date = Column(Date)
+    delivery_hide_time = Column(Time)
+    notify_description = Column(Text)
+    notify_attachment = Column(String(255))
+    notify_document_url = Column(Text)
+    display_to_timetable = Column(Integer, default=0)
+    created_by = Column(Integer)
+    created_at = Column(DateTime)
+
+
+class StudentNotificationMap(Base):
+    __tablename__ = "lms_map_student_notifications"
+
+    lms_msn_id = Column(Integer, primary_key=True, index=True)
+    lmsn_id = Column(Integer)  # EXACT name from table
+    lmsn_det_id = Column(Integer)
+    ssd_id = Column(Integer)
+    student_usn = Column(String(50))
+    notify_seen_flag = Column(Integer, default=0)
+    notify_seenon_datetime = Column(DateTime)
+    created_by = Column(Integer)
+    created_at = Column(DateTime)
+
+
+class LMSLessonSchedule(Base):
+    __tablename__ = 'lms_lesson_schedule'
+
+    lls_id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Fields from Version B (Planning)
+    academic_batch_id = Column(Integer, nullable=True)
+    semester_id = Column(Integer, nullable=True)
+    crs_id = Column(Integer, nullable=True)
+    section_id = Column(Integer, nullable=True)
+    plan_date = Column(Date, nullable=True)
+    start_time = Column(String(45), nullable=True)
+    end_time = Column(String(45), nullable=True)
+    status = Column(Integer, default=0)
+
+    # Fields from Version A (Actual Execution)
+    # conduction_date = Column(Date, nullable=True)
+    # actual_delivery_date = Column(Date, nullable=True)
+
+    # Combined Audit Fields
+    created_by = Column(Integer, nullable=True)
+    modified_by = Column(Integer, nullable=True)
+    created_date = Column(DateTime, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
