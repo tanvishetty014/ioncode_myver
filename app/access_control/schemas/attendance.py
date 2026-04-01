@@ -22,6 +22,7 @@ class LessonDatesResponse(BaseModel):
 
 
 class AttendanceSummaryStudent(BaseModel):
+    usn: str
     name: str
     present: int
     absent: int

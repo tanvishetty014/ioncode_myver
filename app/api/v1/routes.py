@@ -435,7 +435,7 @@ from ...api.v1.ems_module.comman_functions import comman_function
 # )
 
 
-router = APIRouter()
+
 
 
 # router.include_router(

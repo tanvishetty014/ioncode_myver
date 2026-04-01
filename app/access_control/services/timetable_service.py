@@ -333,6 +333,39 @@ def save_attendance_batch(db: Session, attendance_list: List[Dict], meta: Dict) 
     return {"created": created, "updated": updated}
 
 
+def _resolve_attendance_semester_id(
+    db: Session,
+    academic_batch_id: int,
+    semester_id: int,
+) -> int:
+    """Resolve a UI curriculum term id to a real semester id, with DB-id fallback."""
+    term = db.query(models.IEMSCrclmTerm).filter(
+        models.IEMSCrclmTerm.crclm_term_id == semester_id,
+        models.IEMSCrclmTerm.crclm_id == academic_batch_id,
+    ).first()
+
+    if term:
+        mapped_semester = db.query(models.IEMSemester).filter(
+            models.IEMSemester.academic_batch_id == academic_batch_id,
+            models.IEMSemester.semester == term.term_name,
+            models.IEMSemester.status == 1,
+        ).order_by(models.IEMSemester.semester_id.asc()).first()
+
+        if mapped_semester:
+            return mapped_semester.semester_id
+
+    direct_semester = db.query(models.IEMSemester).filter(
+        models.IEMSemester.academic_batch_id == academic_batch_id,
+        models.IEMSemester.semester_id == semester_id,
+        models.IEMSemester.status == 1,
+    ).first()
+
+    if direct_semester:
+        return direct_semester.semester_id
+
+    return semester_id
+
+
 def get_attendance_lesson_dates(
     db: Session,
     academic_batch_id: int,
@@ -341,6 +374,12 @@ def get_attendance_lesson_dates(
     section_id: int,
 ) -> List[date]:
     """Fetch distinct scheduled lesson dates for attendance calendar highlighting."""
+    resolved_semester_id = _resolve_attendance_semester_id(
+        db=db,
+        academic_batch_id=academic_batch_id,
+        semester_id=semester_id,
+    )
+
     query = text(
         """
         SELECT DISTINCT ls.plan_date AS lesson_date
@@ -358,7 +397,7 @@ def get_attendance_lesson_dates(
             query,
             {
                 "academic_batch_id": academic_batch_id,
-                "semester_id": semester_id,
+                "semester_id": resolved_semester_id,
                 "course_id": course_id,
                 "section_id": section_id,
             },
@@ -395,18 +434,29 @@ def get_attendance_summary(
         },
     )
 
+    resolved_semester_id = None
+    if academic_batch_id is not None and semester_id is not None:
+        resolved_semester_id = _resolve_attendance_semester_id(
+            db=db,
+            academic_batch_id=academic_batch_id,
+            semester_id=semester_id,
+        )
+
     conditions = []
     params: Dict = {}
 
     if academic_batch_id is not None:
         conditions.append("ma.academic_batch_id = :academic_batch_id")
         params["academic_batch_id"] = academic_batch_id
-    if semester_id is not None:
+    if resolved_semester_id is not None:
+        conditions.append("ma.semester_id = :semester_id")
+        params["semester_id"] = resolved_semester_id
+    elif semester_id is not None:
         conditions.append("ma.semester_id = :semester_id")
         params["semester_id"] = semester_id
     if course_id is not None:
-        conditions.append("ma.crs_id = :crs_id")
-        params["crs_id"] = course_id
+        conditions.append("ma.crs_id = :course_id")
+        params["course_id"] = course_id
     if section_id is not None:
         conditions.append("ma.section_id = :section_id")
         params["section_id"] = section_id
@@ -427,11 +477,8 @@ def get_attendance_summary(
     query = text(
         f"""
         SELECT 
-            COALESCE(
-                NULLIF(TRIM(s.name), ''),
-                NULLIF(TRIM(CONCAT_WS(' ', s.first_name, s.middle_name, s.last_name)), ''),
-                s.usno
-            ) AS name,
+            s.usno AS usn,
+            s.name AS name,
             COUNT(CASE WHEN msa.attendance_status = 'Present' THEN 1 END) AS present,
             COUNT(CASE WHEN msa.attendance_status = 'Absent' THEN 1 END) AS absent
         FROM lms_manage_attendance ma
@@ -440,9 +487,9 @@ def get_attendance_summary(
         JOIN iems_students s 
             ON s.usno = msa.student_usn
         {where_clause}
-        GROUP BY s.name, s.first_name, s.middle_name, s.last_name, s.usno
+        GROUP BY s.usno, s.name
         {having_clause}
-        ORDER BY name
+        ORDER BY s.usno
         """
     )
 
@@ -452,6 +499,7 @@ def get_attendance_summary(
 
         students = [
             {
+                "usn": row.usn,
                 "name": row.name,
                 "present": int(row.present or 0),
                 "absent": int(row.absent or 0),
